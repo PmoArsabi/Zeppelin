@@ -1,0 +1,5 @@
+paramiko==3.4.0
+pywinauto==0.6.8
+pandas==2.2.1
+streamlit==1.32.2
+python-dotenv==1.0.1
