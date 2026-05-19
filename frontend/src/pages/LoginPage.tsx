@@ -6,50 +6,34 @@ import Button from '../components/ui/Button'
 import Alert from '../components/ui/Alert'
 import FormField from '../components/ui/FormField'
 
-type Mode = 'login' | 'register' | 'recovery'
+type Mode = 'login' | 'recovery'
 
 export default function LoginPage() {
   const { theme, toggle } = useTheme()
-  const [mode, setMode] = useState<Mode>('login')
-  const [email, setEmail]                     = useState('')
-  const [password, setPassword]               = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError]     = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [mode, setMode]         = useState<Mode>('login')
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError]       = useState<string | null>(null)
+  const [message, setMessage]   = useState<string | null>(null)
+  const [loading, setLoading]   = useState(false)
 
-  const switchMode = (next: Mode, keepEmail = false) => {
+  const switchMode = (next: Mode) => {
     setMode(next)
     setError(null)
     setMessage(null)
     setPassword('')
-    setConfirmPassword('')
-    if (!keepEmail) setEmail('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setMessage(null)
-
-    if (mode === 'register') {
-      if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
-      if (password !== confirmPassword) { setError('Las contraseñas no coinciden.'); return }
-    }
-
     setLoading(true)
+
     try {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-
-      } else if (mode === 'register') {
-        const { error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-        // Redirigir a login con mensaje y el email pre-cargado
-        switchMode('login', true)
-        setMessage('¡Cuenta creada! Revisa tu correo para confirmarla y luego inicia sesión.')
-
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
@@ -65,14 +49,10 @@ export default function LoginPage() {
     }
   }
 
-  const titles: Record<Mode, string>    = { login: 'Bienvenido',           register: 'Crear cuenta',          recovery: 'Recuperar contraseña' }
-  const subtitles: Record<Mode, string> = { login: 'Ingresa con tu cuenta.', register: 'Completa tus datos.',   recovery: 'Te enviaremos un enlace.' }
-  const ctas: Record<Mode, string>      = { login: 'Iniciar sesión',        register: 'Crear cuenta',          recovery: 'Enviar enlace'            }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#111827] px-4 py-12 transition-colors duration-300">
 
-      {/* Theme toggle — esquina superior derecha */}
+      {/* Theme toggle */}
       <button
         onClick={toggle}
         title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
@@ -103,10 +83,10 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            {titles[mode]}
+            {mode === 'login' ? 'Bienvenido' : 'Recuperar contraseña'}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm">
-            {subtitles[mode]}
+            {mode === 'login' ? 'Ingresa con tu cuenta.' : 'Te enviaremos un enlace de recuperación.'}
           </p>
         </div>
 
@@ -114,31 +94,10 @@ export default function LoginPage() {
         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-slate-200 dark:border-gray-800
                         shadow-xl shadow-slate-200/50 dark:shadow-black/30 p-8">
 
-          {/* Tabs login / registro */}
-          {mode !== 'recovery' && (
-            <div className="flex rounded-xl bg-slate-100 dark:bg-gray-800 p-1 mb-7">
-              {(['login', 'register'] as const).map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => switchMode(m, m === 'login')}
-                  className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                    mode === m
-                      ? 'bg-white dark:bg-gray-700 text-slate-900 dark:text-white shadow-sm'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                  }`}
-                >
-                  {m === 'login' ? 'Iniciar sesión' : 'Registrarse'}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Back en recovery */}
           {mode === 'recovery' && (
             <button
               type="button"
-              onClick={() => switchMode('login', true)}
+              onClick={() => switchMode('login')}
               className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400
                          hover:text-slate-900 dark:hover:text-white transition-colors mb-7"
             >
@@ -162,34 +121,15 @@ export default function LoginPage() {
               />
             </FormField>
 
-            {mode !== 'recovery' && (
-              <FormField
-                label="Contraseña"
-                required
-                htmlFor="password"
-                hint={mode === 'register' ? 'Mínimo 6 caracteres.' : undefined}
-              >
+            {mode === 'login' && (
+              <FormField label="Contraseña" required htmlFor="password">
                 <Input
                   id="password"
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                  required
-                />
-              </FormField>
-            )}
-
-            {mode === 'register' && (
-              <FormField label="Confirmar contraseña" required htmlFor="confirm">
-                <Input
-                  id="confirm"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   required
                 />
               </FormField>
@@ -199,7 +139,7 @@ export default function LoginPage() {
             {message && <Alert variant="success">{message}</Alert>}
 
             <Button type="submit" loading={loading} size="lg" className="w-full mt-1">
-              {ctas[mode]}
+              {mode === 'login' ? 'Iniciar sesión' : 'Enviar enlace'}
             </Button>
           </form>
 
@@ -207,7 +147,7 @@ export default function LoginPage() {
             <p className="text-center mt-5 text-sm text-slate-500 dark:text-slate-400">
               <button
                 type="button"
-                onClick={() => switchMode('recovery', true)}
+                onClick={() => switchMode('recovery')}
                 className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline underline-offset-2"
               >
                 ¿Olvidaste tu contraseña?

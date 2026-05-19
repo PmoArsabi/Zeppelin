@@ -1,26 +1,31 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
+export type UserRole = 'admin' | 'asesor'
+
 interface AuthContextValue {
   user: User | null
   session: Session | null
   loading: boolean
+  role: UserRole
+  isAdmin: boolean
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser]       = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // getUser() verifies the token server-side — safer than getSession()
     supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user)
+      setUser(data.user ?? null)
+      setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -32,12 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
-  }
+  const role: UserRole = (user?.app_metadata?.role === 'admin') ? 'admin' : 'asesor'
+
+  const signOut = async () => { await supabase.auth.signOut() }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, role, isAdmin: role === 'admin', signOut }}>
       {children}
     </AuthContext.Provider>
   )

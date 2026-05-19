@@ -5,12 +5,12 @@ import AppShell from '../components/layout/AppShell'
 import { Card, CardHeader, CardBody } from '../components/ui/Card'
 import FormField from '../components/ui/FormField'
 import Input from '../components/ui/Input'
-import Select from '../components/ui/Select'
+import CustomSelect from '../components/ui/CustomSelect'
 import Button from '../components/ui/Button'
 import Alert from '../components/ui/Alert'
 import YesNoToggle from '../components/YesNoToggle'
 import {
-  CLIENTES, ASESORES, ESTADOS, TIPOS, MODALIDADES,
+  ESTADOS, TIPOS, MODALIDADES,
   INITIAL_FORM,
   type SolicitudForm,
 } from '../types/solicitud'
@@ -35,7 +35,6 @@ function validate(form: SolicitudForm): Errors {
     e.localizador = 'Solo letras y números, mínimo 3 caracteres, sin espacios.'
   }
   if (!form.cliente)    e.cliente    = 'Debe seleccionar un cliente válido.'
-  if (!form.asesor)     e.asesor     = 'Debe seleccionar un asesor.'
   if (form.tiquetes    === null) e.tiquetes    = 'Requerido.'
   if (form.hoteles     === null) e.hoteles     = 'Requerido.'
   if (form.transportes === null) e.transportes = 'Requerido.'
@@ -66,7 +65,38 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
   const [loading, setLoading]     = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // Poblar el formulario cuando se edita
+  const [clientes, setClientes]   = useState<string[]>([])
+  const [clientesLoading, setClientesLoading] = useState(true)
+
+  // Cargar clientes desde Supabase
+  useEffect(() => {
+    supabase
+      .from('Cliente')
+      .select('FULLNAME')
+      .order('FULLNAME')
+      .then(({ data }) => {
+        setClientes((data ?? []).map((r: { FULLNAME: string }) => r.FULLNAME))
+        setClientesLoading(false)
+      })
+  }, [])
+
+  // Cargar display_name del perfil del usuario autenticado
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.display_name) {
+          setForm(prev => ({ ...prev, asesor: data.display_name }))
+        }
+      })
+  }, [user])
+
+  // Poblar el formulario cuando se edita — setState en effect es correcto aquí (sincroniza con prop externa)
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (editTarget) {
       setForm({
@@ -74,7 +104,6 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
         localizador:   editTarget.localizador,
         cliente:       editTarget.cliente,
         asesor:        editTarget.asesor,
-        ciudad:        editTarget.ciudad ?? '',
         tiquetes:      editTarget.tiquetes,
         hoteles:       editTarget.hoteles,
         transportes:   editTarget.transportes,
@@ -87,11 +116,12 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
         observaciones: editTarget.observaciones ?? '',
       })
     } else {
-      setForm(INITIAL_FORM)
+      setForm(prev => ({ ...INITIAL_FORM, asesor: prev.asesor }))
     }
     setErrors({})
     setSubmitError(null)
   }, [editTarget])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const set = <K extends keyof SolicitudForm>(key: K, value: SolicitudForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -102,15 +132,14 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
     setForm(isEdit && editTarget ? {
       fecha: editTarget.fecha, localizador: editTarget.localizador,
       cliente: editTarget.cliente, asesor: editTarget.asesor,
-      ciudad: editTarget.ciudad ?? '', tiquetes: editTarget.tiquetes,
-      hoteles: editTarget.hoteles, transportes: editTarget.transportes,
-      asistencia: editTarget.asistencia, otros: editTarget.otros,
-      detalle_otros: editTarget.detalle_otros ?? '',
+      tiquetes: editTarget.tiquetes, hoteles: editTarget.hoteles,
+      transportes: editTarget.transportes, asistencia: editTarget.asistencia,
+      otros: editTarget.otros, detalle_otros: editTarget.detalle_otros ?? '',
       estado: editTarget.estado as SolicitudForm['estado'],
       tipo: editTarget.tipo as SolicitudForm['tipo'],
       modalidad: editTarget.modalidad as SolicitudForm['modalidad'],
       observaciones: editTarget.observaciones ?? '',
-    } : INITIAL_FORM)
+    } : { ...INITIAL_FORM, asesor: form.asesor })
     setErrors({})
     setSubmitError(null)
   }
@@ -128,7 +157,6 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
         localizador:   form.localizador.toUpperCase(),
         cliente:       form.cliente,
         asesor:        form.asesor,
-        ciudad:        form.ciudad || null,
         tiquetes:      form.tiquetes,
         hoteles:       form.hoteles,
         transportes:   form.transportes,
@@ -171,8 +199,9 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
   )
 
   return (
-    <AppShell nav={nav}>
+    <AppShell activeModule="solicitudes">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+        <div className="mb-4">{nav}</div>
         {/* Page header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -195,8 +224,17 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
             <CardBody>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormField label="Fecha" required htmlFor="fecha" error={errors.fecha}>
-                  <Input id="fecha" type="date" value={form.fecha}
-                    onChange={e => set('fecha', e.target.value)} error={!!errors.fecha} />
+                  <div className="relative">
+                    <Input id="fecha" type="date" value={form.fecha}
+                      onChange={e => set('fecha', e.target.value)} error={!!errors.fecha}
+                      className="scheme-light dark:scheme-dark pr-10" />
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  </div>
                 </FormField>
 
                 <FormField label="Localizador" required htmlFor="localizador"
@@ -206,26 +244,29 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
                     placeholder="Ej. ABC123" error={!!errors.localizador} />
                 </FormField>
 
-                <FormField label="Cliente" required htmlFor="cliente" error={errors.cliente}>
-                  <Select id="cliente" value={form.cliente}
-                    onChange={e => set('cliente', e.target.value)} error={!!errors.cliente}>
-                    <option value="">Seleccionar cliente...</option>
-                    {CLIENTES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </Select>
+                <FormField label="Cliente" required htmlFor="cliente" error={errors.cliente}
+                  className="sm:col-span-2">
+                  <CustomSelect
+                    id="cliente"
+                    value={form.cliente}
+                    onChange={v => set('cliente', v)}
+                    placeholder={clientesLoading ? 'Cargando clientes...' : 'Seleccionar cliente...'}
+                    error={!!errors.cliente}
+                    disabled={clientesLoading}
+                    searchable
+                    options={clientes.map(c => ({ value: c, label: c }))}
+                  />
                 </FormField>
 
-                <FormField label="Asesor" required htmlFor="asesor" error={errors.asesor}>
-                  <Select id="asesor" value={form.asesor}
-                    onChange={e => set('asesor', e.target.value)} error={!!errors.asesor}>
-                    <option value="">Seleccionar asesor...</option>
-                    {ASESORES.map(a => <option key={a} value={a}>{a}</option>)}
-                  </Select>
-                </FormField>
-
-                <FormField label="Ciudad" optional htmlFor="ciudad" className="sm:col-span-2">
-                  <Input id="ciudad" type="text" value={form.ciudad}
-                    onChange={e => set('ciudad', e.target.value.toUpperCase())}
-                    placeholder="Ej. BOG, MDE, CTG" maxLength={20} />
+                <FormField label="Asesor" htmlFor="asesor" className="sm:col-span-2">
+                  <Input
+                    id="asesor"
+                    type="text"
+                    value={form.asesor}
+                    readOnly
+                    className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 cursor-default"
+                    placeholder="Cargando..."
+                  />
                 </FormField>
               </div>
             </CardBody>
@@ -269,30 +310,36 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
             <CardBody>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                 <FormField label="Estado" required htmlFor="estado" error={errors.estado}>
-                  <Select id="estado" value={form.estado}
-                    onChange={e => set('estado', e.target.value as SolicitudForm['estado'])}
-                    error={!!errors.estado}>
-                    <option value="">Seleccionar...</option>
-                    {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </Select>
+                  <CustomSelect
+                    id="estado"
+                    value={form.estado}
+                    onChange={v => set('estado', v as SolicitudForm['estado'])}
+                    placeholder="Seleccionar..."
+                    error={!!errors.estado}
+                    options={ESTADOS.map(s => ({ value: s, label: s }))}
+                  />
                 </FormField>
 
                 <FormField label="Tipo de solicitud" required htmlFor="tipo" error={errors.tipo}>
-                  <Select id="tipo" value={form.tipo}
-                    onChange={e => set('tipo', e.target.value as SolicitudForm['tipo'])}
-                    error={!!errors.tipo}>
-                    <option value="">Seleccionar...</option>
-                    {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </Select>
+                  <CustomSelect
+                    id="tipo"
+                    value={form.tipo}
+                    onChange={v => set('tipo', v as SolicitudForm['tipo'])}
+                    placeholder="Seleccionar..."
+                    error={!!errors.tipo}
+                    options={TIPOS.map(t => ({ value: t, label: t }))}
+                  />
                 </FormField>
 
                 <FormField label="Modalidad" required htmlFor="modalidad" error={errors.modalidad}>
-                  <Select id="modalidad" value={form.modalidad}
-                    onChange={e => set('modalidad', e.target.value as SolicitudForm['modalidad'])}
-                    error={!!errors.modalidad}>
-                    <option value="">Seleccionar...</option>
-                    {MODALIDADES.map(m => <option key={m} value={m}>{m}</option>)}
-                  </Select>
+                  <CustomSelect
+                    id="modalidad"
+                    value={form.modalidad}
+                    onChange={v => set('modalidad', v as SolicitudForm['modalidad'])}
+                    placeholder="Seleccionar..."
+                    error={!!errors.modalidad}
+                    options={MODALIDADES.map(m => ({ value: m, label: m }))}
+                  />
                 </FormField>
               </div>
             </CardBody>

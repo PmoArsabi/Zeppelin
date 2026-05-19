@@ -17,24 +17,6 @@ export type TipoSolicitud =
 
 export type ModalidadSolicitud = 'ONLINE' | 'OFFLINE'
 
-export const CLIENTES = [
-  'OCENSA',
-  'YANBAL DE COLOMBIA SAS',
-  'AVERY DENNISON',
-  'ECOPETROL',
-  'BANCOLOMBIA',
-  'GRUPO NUTRESA',
-  'CEMENTOS ARGOS',
-] as const
-
-export const ASESORES = [
-  'ASESOR 1',
-  'ASESOR 2',
-  'ASESOR 3',
-  'ASESOR 4',
-  'ASESOR 5',
-] as const
-
 export const ESTADOS: EstadoSolicitud[] = [
   'FINALIZADO',
   'EN TRÁMITE',
@@ -61,7 +43,6 @@ export interface SolicitudForm {
   localizador: string
   cliente: string
   asesor: string
-  ciudad: string
   tiquetes: boolean | null
   hoteles: boolean | null
   transportes: boolean | null
@@ -79,7 +60,6 @@ export const INITIAL_FORM: SolicitudForm = {
   localizador: '',
   cliente: '',
   asesor: '',
-  ciudad: '',
   tiquetes: null,
   hoteles: null,
   transportes: null,

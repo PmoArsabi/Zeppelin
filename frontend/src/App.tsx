@@ -3,17 +3,17 @@ import { useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import SolicitudPage from './pages/SolicitudPage'
 import SolicitudesListPage from './pages/SolicitudesListPage'
+import UsuariosPage from './pages/UsuariosPage'
 
-type View = 'list' | 'new' | 'edit'
+type Module = 'solicitudes' | 'usuarios'
+type SolicitudView = 'list' | 'new' | 'edit'
 
-// Tipo mínimo que necesita el formulario de edición
 export interface SolicitudEdit {
   id: string
   fecha: string
   localizador: string
   cliente: string
   asesor: string
-  ciudad: string | null
   tiquetes: boolean
   hoteles: boolean
   transportes: boolean
@@ -24,6 +24,8 @@ export interface SolicitudEdit {
   tipo: string
   modalidad: string
   observaciones: string | null
+  status: boolean
+  updated_at: string
 }
 
 function Spinner() {
@@ -35,18 +37,29 @@ function Spinner() {
 }
 
 export default function App() {
-  const { user, loading } = useAuth()
-  const [view, setView] = useState<View>('list')
-  const [editTarget, setEditTarget] = useState<SolicitudEdit | null>(null)
+  const { user, loading, isAdmin }   = useAuth()
+  const [module, setModule]          = useState<Module>('solicitudes')
+  const [solView, setSolView]        = useState<SolicitudView>('list')
+  const [editTarget, setEditTarget]  = useState<SolicitudEdit | null>(null)
 
   if (loading) return <Spinner />
   if (!user)   return <LoginPage />
 
-  if (view === 'list') {
+  const navigate = (mod: Module) => {
+    setModule(mod)
+    setSolView('list')
+  }
+
+  if (module === 'usuarios' && isAdmin) {
+    return <UsuariosPage onNavigate={navigate} />
+  }
+
+  if (solView === 'list') {
     return (
       <SolicitudesListPage
-        onNew={() => { setEditTarget(null); setView('new') }}
-        onEdit={s => { setEditTarget(s); setView('edit') }}
+        onNew={() => { setEditTarget(null); setSolView('new') }}
+        onEdit={s => { setEditTarget(s); setSolView('edit') }}
+        onNavigate={navigate}
       />
     )
   }
@@ -54,8 +67,8 @@ export default function App() {
   return (
     <SolicitudPage
       editTarget={editTarget}
-      onSaved={() => setView('list')}
-      onCancel={() => setView('list')}
+      onSaved={() => setSolView('list')}
+      onCancel={() => setSolView('list')}
     />
   )
 }
