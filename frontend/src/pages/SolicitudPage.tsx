@@ -71,11 +71,12 @@ export default function SolicitudPage({ editTarget, onSaved, onCancel }: Props) 
   // Cargar clientes desde Supabase
   useEffect(() => {
     supabase
-      .from('Cliente')
-      .select('FULLNAME')
-      .order('FULLNAME')
+      .schema('raw')
+      .from('xmart_clientes_zeppelin')
+      .select('fullname')
+      .order('fullname')
       .then(({ data }) => {
-        setClientes((data ?? []).map((r: { FULLNAME: string }) => r.FULLNAME))
+        setClientes((data ?? []).map((r: { fullname: string }) => r.fullname))
         setClientesLoading(false)
       })
   }, [])
