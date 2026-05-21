@@ -1,74 +1,27 @@
 import { useState } from 'react'
-import { useAuth } from './context/AuthContext'
-import LoginPage from './pages/LoginPage'
-import SolicitudPage from './pages/SolicitudPage'
-import SolicitudesListPage from './pages/SolicitudesListPage'
-import UsuariosPage from './pages/UsuariosPage'
-
-type Module = 'solicitudes' | 'usuarios'
-type SolicitudView = 'list' | 'new' | 'edit'
-
-export interface SolicitudEdit {
-  id: string
-  fecha: string
-  localizador: string
-  cliente: string
-  asesor: string
-  tiquetes: boolean
-  hoteles: boolean
-  transportes: boolean
-  asistencia: boolean
-  otros: boolean
-  detalle_otros: string | null
-  estado: string
-  tipo: string
-  modalidad: string
-  observaciones: string | null
-  status: boolean
-  updated_at: string
-}
-
-function Spinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#111827]">
-      <div className="w-8 h-8 border-[3px] border-indigo-600 border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
-}
+import { useAuth } from '@/context/AuthContext'
+import Spinner from '@/components/ui/Spinner'
+import LoginPage from '@/pages/LoginPage'
+import { DEFAULT_MODULE_ID, ModuleHost, type ModuleId } from '@/modules'
 
 export default function App() {
-  const { user, loading, isAdmin }   = useAuth()
-  const [module, setModule]          = useState<Module>('solicitudes')
-  const [solView, setSolView]        = useState<SolicitudView>('list')
-  const [editTarget, setEditTarget]  = useState<SolicitudEdit | null>(null)
+  const { user, loading } = useAuth()
+  const [activeModule, setActiveModule] = useState<ModuleId>(DEFAULT_MODULE_ID)
+  const [moduleInstanceKey, setModuleInstanceKey] = useState(0)
+
+  const handleNavigate = (id: ModuleId) => {
+    setActiveModule(id)
+    setModuleInstanceKey(k => k + 1)
+  }
 
   if (loading) return <Spinner />
-  if (!user)   return <LoginPage />
-
-  const navigate = (mod: Module) => {
-    setModule(mod)
-    setSolView('list')
-  }
-
-  if (module === 'usuarios' && isAdmin) {
-    return <UsuariosPage onNavigate={navigate} />
-  }
-
-  if (solView === 'list') {
-    return (
-      <SolicitudesListPage
-        onNew={() => { setEditTarget(null); setSolView('new') }}
-        onEdit={s => { setEditTarget(s); setSolView('edit') }}
-        onNavigate={navigate}
-      />
-    )
-  }
+  if (!user) return <LoginPage />
 
   return (
-    <SolicitudPage
-      editTarget={editTarget}
-      onSaved={() => setSolView('list')}
-      onCancel={() => setSolView('list')}
+    <ModuleHost
+      activeModule={activeModule}
+      onNavigate={handleNavigate}
+      instanceKey={moduleInstanceKey}
     />
   )
 }

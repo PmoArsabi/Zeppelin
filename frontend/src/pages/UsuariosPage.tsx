@@ -7,6 +7,7 @@ import Alert from '../components/ui/Alert'
 import FormField from '../components/ui/FormField'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
+import type { NavigateFn } from '@/modules'
 
 interface UserRow {
   id: string
@@ -28,7 +29,7 @@ const EMPTY_FORM: NewUserForm = {
 }
 
 interface Props {
-  onNavigate: (mod: 'solicitudes' | 'usuarios') => void
+  onNavigate: NavigateFn
 }
 
 // ── Modal crear usuario ───────────────────────────────────────────────────────

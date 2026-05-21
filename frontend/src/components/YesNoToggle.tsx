@@ -2,9 +2,10 @@ interface YesNoToggleProps {
   value: boolean | null
   onChange: (v: boolean) => void
   error?: boolean
+  disabled?: boolean
 }
 
-export default function YesNoToggle({ value, onChange, error }: YesNoToggleProps) {
+export default function YesNoToggle({ value, onChange, error, disabled }: YesNoToggleProps) {
   return (
     <div className={`inline-flex rounded-xl border overflow-hidden transition-all ${error ? 'border-rose-400 dark:border-rose-500' : 'border-slate-200 dark:border-slate-700'}`}>
       {([true, false] as const).map((opt) => {
@@ -14,8 +15,10 @@ export default function YesNoToggle({ value, onChange, error }: YesNoToggleProps
           <button
             key={String(opt)}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(opt)}
             className={`
+              disabled:opacity-50 disabled:cursor-not-allowed
               px-5 py-2.5 text-sm font-semibold transition-all duration-150
               focus:outline-none focus:ring-2 focus:ring-inset
               ${isActive

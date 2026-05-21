@@ -52,7 +52,6 @@ export interface SolicitudForm {
   estado: EstadoSolicitud | ''
   tipo: TipoSolicitud | ''
   modalidad: ModalidadSolicitud | ''
-  observaciones: string
 }
 
 export const INITIAL_FORM: SolicitudForm = {
@@ -69,5 +68,4 @@ export const INITIAL_FORM: SolicitudForm = {
   estado: '',
   tipo: '',
   modalidad: '',
-  observaciones: '',
 }

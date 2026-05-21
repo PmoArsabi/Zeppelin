@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { useAuth } from '../../context/AuthContext'
-import { useTheme } from '../../context/ThemeContext'
-
-type Module = 'solicitudes' | 'usuarios'
+import { useAuth } from '@/context/AuthContext'
+import { useTheme } from '@/context/ThemeContext'
+import { getNavItems, type ModuleId, type NavigateFn } from '@/modules'
 
 interface AppShellProps {
   children: React.ReactNode
-  activeModule?: Module
-  onNavigate?: (mod: Module) => void
+  activeModule?: ModuleId
+  onNavigate?: NavigateFn
 }
 
 function ThemeToggle() {
@@ -35,41 +34,21 @@ function ThemeToggle() {
   )
 }
 
-const NAV_ITEMS: { id: Module; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
-  {
-    id: 'solicitudes',
-    label: 'Solicitudes',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'usuarios',
-    label: 'Usuarios',
-    adminOnly: true,
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
-]
-
-export default function AppShell({ children, activeModule = 'solicitudes', onNavigate }: AppShellProps) {
+export default function AppShell({ children, activeModule = 'solicitudes-corporativos', onNavigate }: AppShellProps) {
   const { user, signOut, isAdmin } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
+  const navItems = getNavItems(isAdmin)
 
-  const NavItem = ({ item }: { item: typeof NAV_ITEMS[number] }) => {
+  const NavItem = ({ item }: { item: (typeof navItems)[number] }) => {
     const active = activeModule === item.id
     return (
       <button
-        onClick={() => { onNavigate?.(item.id); setMobileOpen(false) }}
+        type="button"
+        onClick={() => {
+          onNavigate?.(item.id)
+          setMobileOpen(false)
+        }}
         className={`
           w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
           ${active
@@ -89,7 +68,6 @@ export default function AppShell({ children, activeModule = 'solicitudes', onNav
 
       {/* Sidebar desktop */}
       <aside className="hidden md:flex flex-col w-56 shrink-0 bg-white dark:bg-gray-900 border-r border-slate-200 dark:border-gray-800 fixed top-0 left-0 h-full z-20">
-        {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-16 border-b border-slate-200 dark:border-gray-800 shrink-0">
           <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shadow-sm shadow-indigo-600/30 shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -99,15 +77,13 @@ export default function AppShell({ children, activeModule = 'solicitudes', onNav
           <span className="font-bold text-slate-900 dark:text-white tracking-tight">Zeppelin</span>
         </div>
 
-        {/* Nav items */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           <p className="px-3 mb-2 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest">
             Módulos
           </p>
-          {visibleItems.map(item => <NavItem key={item.id} item={item} />)}
+          {navItems.map(item => <NavItem key={item.id} item={item} />)}
         </nav>
 
-        {/* User footer */}
         <div className="px-3 py-4 border-t border-slate-200 dark:border-gray-800 space-y-1">
           <div className="flex items-center gap-2.5 px-3 py-2 mb-1">
             <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0">
@@ -140,7 +116,6 @@ export default function AppShell({ children, activeModule = 'solicitudes', onNav
         </div>
       </aside>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-30 md:hidden">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
@@ -165,7 +140,7 @@ export default function AppShell({ children, activeModule = 'solicitudes', onNav
               <p className="px-3 mb-2 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest">
                 Módulos
               </p>
-              {visibleItems.map(item => <NavItem key={item.id} item={item} />)}
+              {navItems.map(item => <NavItem key={item.id} item={item} />)}
             </nav>
             <div className="px-3 py-4 border-t border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2.5 px-3 py-2 mb-2">
@@ -197,9 +172,7 @@ export default function AppShell({ children, activeModule = 'solicitudes', onNav
         </div>
       )}
 
-      {/* Main content — offset por sidebar en desktop */}
       <div className="flex-1 flex flex-col min-w-0 md:ml-56">
-        {/* Top bar mobile */}
         <header className="md:hidden sticky top-0 z-10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-gray-800">
           <div className="flex items-center justify-between px-4 h-14">
             <button
