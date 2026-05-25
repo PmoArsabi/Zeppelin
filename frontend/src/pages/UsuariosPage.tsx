@@ -433,14 +433,17 @@ export default function UsuariosPage({ onNavigate }: Props) {
 
             {/* Tabla desktop */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 bg-slate-50/60 dark:bg-gray-800/40">
-                    {['Usuario', 'Correo', 'Rol', 'Estado', 'Fecha registro', 'Acciones'].map((h, i) => (
+                    {['Usuario', 'Correo', 'Rol', 'Estado', 'Fecha registro'].map((h, i) => (
                       <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
                     ))}
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap sticky right-0 bg-slate-50/60 dark:bg-gray-800/40">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
@@ -456,11 +459,11 @@ export default function UsuariosPage({ onNavigate }: Props) {
                           <p className="font-medium text-slate-800 dark:text-slate-200">{u.display_name}</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400">{u.email}</td>
+                      <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={u.email}>{u.email}</td>
                       <td className="px-4 py-3.5">{roleBadge(u.role)}</td>
                       <td className="px-4 py-3.5">{statusBadge(u.disabled)}</td>
                       <td className="px-4 py-3.5 text-slate-400 dark:text-slate-500 text-xs whitespace-nowrap">{formatDateDDMMYYYY(u.created_at)}</td>
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5 sticky right-0 bg-white dark:bg-gray-900">
                         <div className="flex items-center gap-1.5">
                           {/* Editar */}
                           <button
