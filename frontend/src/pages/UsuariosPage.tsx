@@ -7,7 +7,7 @@ import PageTitle from '../components/ui/PageTitle'
 import Alert from '../components/ui/Alert'
 import FormField from '../components/ui/FormField'
 import Input from '../components/ui/Input'
-import Select from '../components/ui/Select'
+import CustomSelect from '../components/ui/CustomSelect'
 import type { NavigateFn } from '@/modules'
 import { formatDateDDMMYYYY } from '@/lib/formatDate'
 
@@ -20,14 +20,24 @@ interface UserRow {
   disabled: boolean
 }
 
+type RoleOption = 'admin' | 'coordinador_mice' | 'asesor_mice' | 'tiqueteador_mice'
+
+const ROLE_OPTIONS: { value: RoleOption; label: string }[] = [
+  { value: 'admin',            label: 'Administrador' },
+  { value: 'coordinador_mice', label: 'Coordinador MICE' },
+  { value: 'asesor_mice',      label: 'Asesor MICE' },
+  { value: 'tiqueteador_mice', label: 'Tiqueteador MICE' },
+]
+
 interface NewUserForm {
   email: string
   display_name: string
-  role: 'admin' | 'asesor'
+  role: RoleOption
+  password: string
 }
 
 const EMPTY_FORM: NewUserForm = {
-  email: '', display_name: '', role: 'asesor',
+  email: '', display_name: '', role: 'asesor_mice', password: '',
 }
 
 interface Props {
@@ -51,6 +61,8 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     if (!form.display_name.trim()) e.display_name = 'El nombre es obligatorio.'
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = 'Ingresa un correo válido.'
+    if (form.password && form.password.trim().length < 8)
+      e.password = 'La contraseña debe tener al menos 8 caracteres.'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -75,6 +87,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             email: form.email.trim().toLowerCase(),
             display_name: form.display_name.trim(),
             role: form.role,
+            ...(form.password.trim() ? { password: form.password.trim() } : {}),
           }),
         }
       )
@@ -105,12 +118,23 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
         <form onSubmit={handleSubmit} noValidate className="px-6 py-5 space-y-4">
           {submitError && <Alert variant="error">{submitError}</Alert>}
 
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-sm text-indigo-700 dark:text-indigo-300">
-            <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            Se enviará un correo de invitación. El usuario configurará su contraseña al aceptar.
-          </div>
+          {form.password
+            ? (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300">
+                <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                El usuario podrá iniciar sesión con esta contraseña provisional. Compártela de forma segura.
+              </div>
+            ) : (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-sm text-indigo-700 dark:text-indigo-300">
+                <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Se enviará un correo de invitación. El usuario configurará su contraseña al aceptar.
+              </div>
+            )
+          }
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Nombre completo" required htmlFor="cn_name" error={errors.display_name}>
@@ -119,24 +143,44 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 placeholder="Ej. María García" error={!!errors.display_name} />
             </FormField>
             <FormField label="Rol" required htmlFor="cn_role">
-              <Select id="cn_role" value={form.role} onChange={e => set('role', e.target.value as 'admin' | 'asesor')}>
-                <option value="asesor">Asesor</option>
-                <option value="admin">Administrador</option>
-              </Select>
+              <CustomSelect
+                id="cn_role"
+                value={form.role}
+                onChange={v => set('role', v as RoleOption)}
+                options={ROLE_OPTIONS}
+              />
             </FormField>
             <FormField label="Correo electrónico" required htmlFor="cn_email" error={errors.email} className="sm:col-span-2">
               <Input id="cn_email" type="email" value={form.email}
                 onChange={e => set('email', e.target.value)}
                 placeholder="usuario@empresa.com" error={!!errors.email} />
             </FormField>
+            <FormField label="Contraseña provisional" htmlFor="cn_password" className="sm:col-span-2"
+              error={errors.password}
+              hint="Opcional. Si la dejas vacía se enviará invitación por correo.">
+              <Input id="cn_password" type="password" value={form.password}
+                onChange={e => set('password', e.target.value)}
+                placeholder="Mín. 8 caracteres" error={!!errors.password} />
+            </FormField>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>Cancelar</Button>
             <Button type="submit" loading={submitting}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              Enviar invitación
+              {form.password.trim() ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Crear usuario
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Enviar invitación
+                </>
+              )}
             </Button>
           </div>
         </form>
@@ -153,7 +197,7 @@ function EditModal({ user, onClose, onSaved }: {
 }) {
   const { user: me } = useAuth()
   const [displayName, setDisplayName] = useState(user.display_name)
-  const [role, setRole]               = useState<'admin' | 'asesor'>(user.role as 'admin' | 'asesor')
+  const [role, setRole]               = useState<RoleOption>(user.role as RoleOption)
   const [disabled, setDisabled]       = useState(user.disabled)
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
@@ -221,10 +265,12 @@ function EditModal({ user, onClose, onSaved }: {
           </FormField>
 
           <FormField label="Rol" required htmlFor="ed_role">
-            <Select id="ed_role" value={role} onChange={e => setRole(e.target.value as 'admin' | 'asesor')}>
-              <option value="asesor">Asesor</option>
-              <option value="admin">Administrador</option>
-            </Select>
+            <CustomSelect
+              id="ed_role"
+              value={role}
+              onChange={v => setRole(v as RoleOption)}
+              options={ROLE_OPTIONS}
+            />
           </FormField>
 
           {!isSelf && (
@@ -264,9 +310,12 @@ function EditModal({ user, onClose, onSaved }: {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const roleBadge = (role: string) =>
-  role === 'admin'
-    ? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">Admin</span>
-    : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-slate-400">Asesor</span>
+  ({
+    admin:            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">Administrador</span>,
+    coordinador_mice: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Coordinador MICE</span>,
+    asesor_mice:      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">Asesor MICE</span>,
+    tiqueteador_mice: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">Tiqueteador MICE</span>,
+  } as Record<string, React.ReactNode>)[role] ?? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-slate-400">{role}</span>
 
 const statusBadge = (disabled: boolean) =>
   disabled

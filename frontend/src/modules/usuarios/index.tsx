@@ -6,6 +6,6 @@ export const usuariosModule: ModuleDefinition = {
   id: 'usuarios',
   label: 'Usuarios',
   icon: <UsersIcon />,
-  adminOnly: true,
+  allowedRoles: ['admin'],
   component: UsuariosModule,
 }

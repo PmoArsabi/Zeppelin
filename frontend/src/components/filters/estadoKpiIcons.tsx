@@ -183,6 +183,7 @@ function normEstadoKey(nombre: string): string {
 }
 
 /** Icono representativo por nombre de estado (MICE + Corporativo) */
+// eslint-disable-next-line react-refresh/only-export-components
 export function resolveEstadoKpiIcon(nombre: string, className?: string): ReactNode {
   const k = normEstadoKey(nombre)
 
@@ -223,6 +224,7 @@ export function resolveEstadoKpiIcon(nombre: string, className?: string): ReactN
   return <IconFolderOpen className={className} />
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function iconColorForVariant(variant: BadgeVariant): string {
   const map: Record<BadgeVariant, string> = {
     emerald: 'text-emerald-600 dark:text-emerald-400',
@@ -235,6 +237,7 @@ export function iconColorForVariant(variant: BadgeVariant): string {
   return map[variant]
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function iconBgForVariant(variant: BadgeVariant): string {
   const map: Record<BadgeVariant, string> = {
     emerald: 'bg-emerald-50 dark:bg-emerald-500/15',
@@ -247,6 +250,7 @@ export function iconBgForVariant(variant: BadgeVariant): string {
   return map[variant]
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function valueColorForVariant(variant: BadgeVariant): string {
   const map: Record<BadgeVariant, string> = {
     emerald: 'text-emerald-700 dark:text-emerald-400',
@@ -259,6 +263,7 @@ export function valueColorForVariant(variant: BadgeVariant): string {
   return map[variant]
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function kpiActiveRingForVariant(variant: BadgeVariant): string {
   const map: Record<BadgeVariant, string> = {
     emerald: 'ring-2 ring-emerald-500/40',

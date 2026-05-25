@@ -363,7 +363,7 @@ export default function SolicitudMiceFormPage({
 
   useEffect(() => {
     if (!mzpAuto) return
-    void applyNextMzp()
+    void applyNextMzp() // eslint-disable-line react-hooks/set-state-in-effect
   }, [mzpAuto, applyNextMzp])
 
   const minAnio = catalog.anios.length ? Math.min(...catalog.anios) : 2025

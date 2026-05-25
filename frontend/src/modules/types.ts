@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
+import type { UserRole } from '@/context/AuthContext'
 
 /** Identificador único de cada módulo de la app */
 export type ModuleId = 'solicitudes-corporativos' | 'solicitudes-mice' | 'usuarios'
@@ -9,14 +10,15 @@ export interface ModuleNavItem {
   id: ModuleId
   label: string
   icon: ReactNode
-  adminOnly?: boolean
+  allowedRoles?: UserRole[]
 }
 
 export interface ModuleDefinition {
   id: ModuleId
   label: string
   icon: ReactNode
-  adminOnly?: boolean
+  /** Si se define, solo estos roles pueden acceder. Undefined = todos los autenticados. */
+  allowedRoles?: UserRole[]
   /** Módulo por defecto al iniciar sesión */
   default?: boolean
   component: ComponentType<{ onNavigate: NavigateFn }>

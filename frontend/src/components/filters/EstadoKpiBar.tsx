@@ -11,6 +11,7 @@ import {
 
 export type EstadoKpiItem = { nombre: string; count: number }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function sortEstadoKpiItems(items: EstadoKpiItem[], pipelineOrder: string[]): EstadoKpiItem[] {
   return [...items].sort((a, b) => {
     const ia = pipelineOrder.indexOf(a.nombre)
@@ -22,6 +23,7 @@ export function sortEstadoKpiItems(items: EstadoKpiItem[], pipelineOrder: string
   })
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildEstadoKpiItems(
   rows: { estado: string }[],
   pipelineOrder: string[] = []
@@ -38,7 +40,9 @@ export function buildEstadoKpiItems(
 
 const CARD_BASE =
   'shrink-0 snap-start flex items-center justify-between gap-2 min-w-[6.75rem] max-w-[9.5rem] ' +
-  'rounded-xl bg-white dark:bg-gray-900 px-2.5 py-2 shadow-sm hover:shadow-md transition-all'
+  'rounded-xl bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-600 ' +
+  'px-2.5 py-2 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-gray-500 ' +
+  'cursor-pointer transition-all'
 
 interface KpiCardProps {
   label: string

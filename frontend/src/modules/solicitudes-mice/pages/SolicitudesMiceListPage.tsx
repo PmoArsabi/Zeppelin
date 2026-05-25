@@ -183,11 +183,13 @@ function MiceRowActions({
   row,
   onView,
   onEdit,
+  canEdit,
   layout,
 }: {
   row: SolicitudMiceRow
   onView: (row: SolicitudMiceRow) => void
   onEdit: (row: SolicitudMiceRow) => void
+  canEdit: boolean
   layout: 'icons' | 'buttons'
 }) {
   if (layout === 'icons') {
@@ -207,24 +209,22 @@ function MiceRowActions({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
         </button>
-        <button
-          type="button"
-          onClick={() => onEdit(row)}
-          title="Editar cotización"
-          aria-label="Editar cotización"
-          className="w-7 h-7 flex items-center justify-center rounded-lg
-                     text-slate-400 hover:text-amber-600 hover:bg-amber-50
-                     dark:hover:text-amber-400 dark:hover:bg-amber-500/10 transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-            />
-          </svg>
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(row)}
+            title="Editar cotización"
+            aria-label="Editar cotización"
+            className="w-7 h-7 flex items-center justify-center rounded-lg
+                       text-slate-400 hover:text-amber-600 hover:bg-amber-50
+                       dark:hover:text-amber-400 dark:hover:bg-amber-500/10 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+        )}
       </div>
     )
   }
@@ -244,23 +244,21 @@ function MiceRowActions({
         </svg>
         Ver
       </button>
-      <button
-        type="button"
-        onClick={() => onEdit(row)}
-        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl
-                   text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10
-                   hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-          />
-        </svg>
-        Editar
-      </button>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => onEdit(row)}
+          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl
+                     text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10
+                     hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Editar
+        </button>
+      )}
     </div>
   )
 }
@@ -269,10 +267,12 @@ function MiceSolicitudMobileCard({
   row,
   onView,
   onEdit,
+  canEdit,
 }: {
   row: SolicitudMiceRow
   onView: (row: SolicitudMiceRow) => void
   onEdit: (row: SolicitudMiceRow) => void
+  canEdit: boolean
 }) {
   return (
     <article className="p-4">
@@ -328,14 +328,14 @@ function MiceSolicitudMobileCard({
       </div>
 
       <div className="pt-3 border-t border-slate-100 dark:border-gray-800">
-        <MiceRowActions row={row} onView={onView} onEdit={onEdit} layout="buttons" />
+        <MiceRowActions row={row} onView={onView} onEdit={onEdit} canEdit={canEdit} layout="buttons" />
       </div>
     </article>
   )
 }
 
 export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavigate }: Props) {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, permissions } = useAuth()
   const [rows, setRows] = useState<SolicitudMiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -422,12 +422,14 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
             <PageTitle>Solicitudes MICE</PageTitle>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{countLabel}</p>
           </div>
-          <Button onClick={onNew} size="md" className="w-full sm:w-auto shrink-0">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            Nueva solicitud
-          </Button>
+          {permissions.canCreateMice && (
+            <Button onClick={onNew} size="md" className="w-full sm:w-auto shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Nueva solicitud
+            </Button>
+          )}
         </div>
 
         {error && <Alert variant="error" className="mb-5">{error}</Alert>}
@@ -530,7 +532,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
                         {fmtMoney(row.valor_cotizado, row.moneda_cotizacion ?? 'COP')}
                       </td>
                       <td className={`${TD} text-right`}>
-                        <MiceRowActions row={row} onView={onView} onEdit={onEdit} layout="icons" />
+                        <MiceRowActions row={row} onView={onView} onEdit={onEdit} canEdit={permissions.canEditMice} layout="icons" />
                       </td>
                     </tr>
                   ))}
@@ -540,7 +542,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
 
             <div className="md:hidden divide-y divide-slate-100 dark:divide-gray-800">
               {filtered.map(row => (
-                <MiceSolicitudMobileCard key={row.id} row={row} onView={onView} onEdit={onEdit} />
+                <MiceSolicitudMobileCard key={row.id} row={row} onView={onView} onEdit={onEdit} canEdit={permissions.canEditMice} />
               ))}
             </div>
 

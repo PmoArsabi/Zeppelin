@@ -4,8 +4,8 @@ import type { ModuleHostProps } from './types'
 
 /** Renderiza el módulo activo; redirige al default si no hay permiso */
 export default function ModuleHost({ activeModule, onNavigate, instanceKey = 0 }: ModuleHostProps) {
-  const { isAdmin } = useAuth()
-  const mod = canAccessModule(activeModule, isAdmin)
+  const { role } = useAuth()
+  const mod = canAccessModule(activeModule, role)
     ? getModule(activeModule)
     : getDefaultModule()
 

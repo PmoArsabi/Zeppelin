@@ -36,10 +36,16 @@ function ThemeToggle() {
 }
 
 export default function AppShell({ children, activeModule = 'solicitudes-corporativos', onNavigate }: AppShellProps) {
-  const { user, signOut, isAdmin } = useAuth()
+  const { user, signOut, role } = useAuth()
+  const ROLE_LABELS: Record<typeof role, string> = {
+    admin: 'Administrador',
+    coordinador_mice: 'Coordinador MICE',
+    asesor_mice: 'Asesor MICE',
+    tiqueteador_mice: 'Tiqueteador MICE',
+  }
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const navItems = getNavItems(isAdmin)
+  const navItems = getNavItems(role)
 
   const NavItem = ({ item }: { item: (typeof navItems)[number] }) => {
     const active = activeModule === item.id
@@ -90,7 +96,7 @@ export default function AppShell({ children, activeModule = 'solicitudes-corpora
             <div className="min-w-0">
               <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{user?.email}</p>
               <p className="text-[10px] text-slate-400 dark:text-slate-500 capitalize">
-                {isAdmin ? 'Administrador' : 'Asesor'}
+                {ROLE_LABELS[role]}
               </p>
             </div>
           </div>
@@ -142,7 +148,7 @@ export default function AppShell({ children, activeModule = 'solicitudes-corpora
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{user?.email}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">{isAdmin ? 'Administrador' : 'Asesor'}</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">{ROLE_LABELS[role]}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1 px-1">

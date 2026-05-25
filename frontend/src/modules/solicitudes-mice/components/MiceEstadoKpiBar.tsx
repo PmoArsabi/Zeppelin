@@ -3,6 +3,7 @@ import EstadoKpiBar, { buildEstadoKpiItems, type EstadoKpiItem } from '@/compone
 import type { BadgeVariant } from '@/components/ui/Badge'
 
 export type { EstadoKpiItem }
+// eslint-disable-next-line react-refresh/only-export-components
 export { buildEstadoKpiItems }
 
 const MICE_ESTADO_ORDER = [
@@ -29,6 +30,7 @@ export default function MiceEstadoKpiBar(props: Props) {
   return <EstadoKpiBar {...props} badgeVariant={miceBadgeVariant} />
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildMiceEstadoKpiItems(rows: { estado: string }[]): EstadoKpiItem[] {
   return buildEstadoKpiItems(rows, MICE_ESTADO_ORDER)
 }

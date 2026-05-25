@@ -196,18 +196,14 @@ async function fetchProfileNombreById(): Promise<Map<string, string>> {
 }
 
 export async function listSolicitudesMice(
-  userId: string,
-  isAdmin: boolean
+  _userId: string,
+  _isAdmin: boolean
 ): Promise<{ data: SolicitudMiceRow[] | null; error: string | null }> {
-  let query = supabase
+  const { data, error } = await supabase
     .from(TABLE)
     .select('*')
     .order('fecha_solicitud', { ascending: false })
     .order('created_at', { ascending: false })
-
-  if (!isAdmin) query = query.eq('user_id', userId)
-
-  const { data, error } = await query
   if (error) return { data: null, error: error.message }
 
   const [{ data: catalogData }, { data: clientesCatalog }, profileNombreById] = await Promise.all([
