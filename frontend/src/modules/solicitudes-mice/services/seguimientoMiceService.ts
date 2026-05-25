@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import type { SeguimientoMiceEntry } from '../types/seguimiento-mice'
 
-const TABLE = 'solicitud_mice_seguimientos'
+const TABLE = 'th_solicitud_mice_seguimientos'
 
 /** Mensaje claro para errores de Supabase / migración */
 export function formatSeguimientoError(message: string): string {
@@ -9,7 +9,7 @@ export function formatSeguimientoError(message: string): string {
   if (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find')) {
     return (
       'La tabla de seguimientos no está disponible. En Supabase → SQL Editor ejecute ' +
-      'database/migrations/005_solicitud_mice_seguimiento_historial.sql. ' +
+      'database/migrations/005 y 009_nomenclatura_td_th_itd.sql. ' +
       'Luego Settings → API → Reload schema y recargue esta página (F5).'
     )
   }

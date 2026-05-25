@@ -8,6 +8,7 @@ import FormField from '../components/ui/FormField'
 import Input from '../components/ui/Input'
 import CustomSelect from '../components/ui/CustomSelect'
 import Button from '../components/ui/Button'
+import PageTitle from '../components/ui/PageTitle'
 import Alert from '../components/ui/Alert'
 import YesNoToggle from '../components/YesNoToggle'
 import SaveFeedbackOverlay, { type SaveFeedbackState } from '@/components/ui/SaveFeedbackOverlay'
@@ -130,7 +131,7 @@ function FormSection({
           </span>
         )}
         <div>
-          <h3 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">{title}</h3>
+          <PageTitle as="h3" size="section">{title}</PageTitle>
           {description && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
           )}
@@ -194,7 +195,7 @@ export default function SolicitudPage({
   useEffect(() => {
     if (!user) return
     supabase
-      .from('profiles')
+      .from('td_profiles')
       .select('display_name')
       .eq('id', user.id)
       .single()
@@ -277,7 +278,7 @@ export default function SolicitudPage({
 
     try {
       if (isEdit) {
-        const { error } = await supabase.from('solicitudes').update(payload).eq('id', editTarget!.id)
+        const { error } = await supabase.from('th_solicitud_corporativos').update(payload).eq('id', editTarget!.id)
         if (error) throw error
         if (formBaseline) {
           const observacion = buildAuditoriaCorpObservacion(formBaseline, form)
@@ -296,7 +297,7 @@ export default function SolicitudPage({
         })
       } else {
         const { data, error } = await supabase
-          .from('solicitudes')
+          .from('th_solicitud_corporativos')
           .insert({ ...payload, user_id: user.id })
           .select('id')
           .single()
@@ -352,9 +353,9 @@ export default function SolicitudPage({
 
         {!lock && (
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            <PageTitle>
               {isEdit ? 'Editar solicitud' : 'Nueva solicitud operativa'}
-            </h1>
+            </PageTitle>
           </div>
         )}
 

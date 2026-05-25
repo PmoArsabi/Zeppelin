@@ -31,7 +31,7 @@ export default function SaveFeedbackOverlay({ feedback, onDismiss }: Props) {
         onClick={e => e.stopPropagation()}
       >
         {status === 'saving' && (
-          <div className="mx-auto mb-4 w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <div className="mx-auto mb-4 w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
         )}
         {status === 'success' && (
           <div className="mx-auto mb-4 w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">

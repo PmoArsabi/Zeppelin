@@ -1,13 +1,13 @@
 import { supabase } from '@/lib/supabase'
 import type { LogAuditoriaEntry, ModuloAuditoria } from './types'
 
-const TABLE = 'log_auditoria'
+const TABLE = 'th_log_auditoria'
 
 export function formatLogAuditoriaError(message: string): string {
   const m = message.toLowerCase()
   if (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find')) {
     return (
-      'La tabla log_auditoria no está disponible. Ejecute database/migrations/007_log_auditoria_generico.sql en Supabase.'
+      'La tabla th_log_auditoria no está disponible. Ejecute database/migrations/007 y 009_nomenclatura_td_th_itd.sql en Supabase.'
     )
   }
   if (m.includes('permission denied') || m.includes('row-level security')) {

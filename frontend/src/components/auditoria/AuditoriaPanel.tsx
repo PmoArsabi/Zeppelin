@@ -3,20 +3,11 @@ import Alert from '@/components/ui/Alert'
 import { parseLineasObservacion, type TipoCambioAuditoria } from '@/lib/auditoria/buildObservacion'
 import { listLogAuditoria } from '@/lib/auditoria/logAuditoriaService'
 import { MODULO_AUDITORIA_LABELS, type ModuloAuditoria } from '@/lib/auditoria/types'
+import { formatDateTimeDDMMYYYY } from '@/lib/formatDate'
 
 interface Props {
   modulo: ModuloAuditoria
   idRegistro: string | null
-}
-
-function formatFechaHora(iso: string): string {
-  return new Date(iso).toLocaleString('es-CO', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 const ESTILO_LINEA: Record<TipoCambioAuditoria, string> = {
@@ -111,7 +102,7 @@ export default function AuditoriaPanel({ modulo, idRegistro }: Props) {
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
                 <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                  {formatFechaHora(entry.fecha_actualizacion)}
+                  {formatDateTimeDDMMYYYY(entry.fecha_actualizacion)}
                 </span>
                 {entry.autor_nombre && (
                   <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">

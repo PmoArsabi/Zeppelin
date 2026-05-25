@@ -1,3 +1,5 @@
+import PageTitle from './PageTitle'
+
 interface CardProps {
   children: React.ReactNode
   className?: string
@@ -27,7 +29,7 @@ export function CardHeader({ step, title, description }: CardHeaderProps) {
           </span>
         )}
         <div>
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
+          <PageTitle as="h2" size="section">{title}</PageTitle>
           {description && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
           )}

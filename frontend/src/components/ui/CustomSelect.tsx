@@ -6,7 +6,7 @@ interface Option {
 }
 
 interface CustomSelectProps {
-  value: string
+  value: string | null | undefined
   onChange: (value: string) => void
   options: Option[]
   placeholder?: string
@@ -30,7 +30,9 @@ export default function CustomSelect({
   const [query, setQuery]     = useState('')
   const ref                   = useRef<HTMLDivElement>(null)
   const searchRef             = useRef<HTMLInputElement>(null)
-  const selected              = options.find(o => o.value === value)
+  const safeValue = value ?? ''
+  const selected = options.find(o => o.value === safeValue)
+  const displayLabel = selected?.label ?? (safeValue.trim() ? safeValue.trim() : null)
 
   const filtered = useMemo(() => {
     if (!searchable || !query.trim()) return options
@@ -82,10 +84,10 @@ export default function CustomSelect({
           bg-white dark:bg-slate-800/60
           disabled:opacity-50 disabled:cursor-not-allowed
           ${borderClass} ${focusClass}
-          ${selected ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}
+          ${displayLabel ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}
         `}
       >
-        <span className="truncate">{selected ? selected.label : placeholder}</span>
+        <span className="truncate">{displayLabel ?? placeholder}</span>
         <svg
           className={`w-4 h-4 shrink-0 ml-2 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -137,7 +139,7 @@ export default function CustomSelect({
                     onClick={() => handleSelect(opt.value)}
                     className={`
                       w-full text-left px-4 py-2.5 text-sm transition-colors duration-100
-                      ${opt.value === value
+                      ${opt.value === safeValue
                         ? 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-medium'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
                       }

@@ -4,10 +4,15 @@ import { useAuth } from '../context/AuthContext'
 import AppShell from '../components/layout/AppShell'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import PageTitle from '../components/ui/PageTitle'
 import Alert from '../components/ui/Alert'
-import Select from '../components/ui/Select'
+import CollapsibleFilterPanel from '../components/filters/CollapsibleFilterPanel'
+import EstadoKpiBar, { buildEstadoKpiItems } from '../components/filters/EstadoKpiBar'
+import FilterMultiSelect from '../components/filters/FilterMultiSelect'
+import FilterSearchField from '../components/filters/FilterSearchField'
 import type { BadgeVariant } from '../components/ui/Badge'
 import type { NavigateFn } from '@/modules'
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '@/lib/formatDate'
 import { ESTADOS, TIPOS, MODALIDADES, type EstadoSolicitud } from '@/modules/solicitudes-corporativos/types'
 
 interface Solicitud {
@@ -39,6 +44,23 @@ const ESTADO_BADGE: Record<EstadoSolicitud, BadgeVariant> = {
   'COTIZACIÓN RECHAZADA': 'slate',
 }
 
+const CORP_ESTADO_PIPELINE: EstadoSolicitud[] = [
+  'PENDIENTE',
+  'EN TRÁMITE',
+  'COTIZACIÓN RECHAZADA',
+  'FINALIZADO',
+  'ANULADO',
+]
+
+function corpBadgeVariant(estado: string): BadgeVariant {
+  return ESTADO_BADGE[estado as EstadoSolicitud] ?? 'slate'
+}
+
+function matchesMulti(selected: string[], rowValue: string): boolean {
+  if (selected.length === 0) return true
+  return selected.includes(rowValue)
+}
+
 const SERVICIOS_MAP: { key: keyof Solicitud; label: string }[] = [
   { key: 'tiquetes',    label: 'Tiquetes' },
   { key: 'hoteles',     label: 'Hoteles' },
@@ -49,7 +71,7 @@ const SERVICIOS_MAP: { key: keyof Solicitud; label: string }[] = [
 
 const TH =
   'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap'
-const TD = 'px-3 py-2 text-xs text-slate-600 dark:text-slate-300'
+const TD = 'px-3 py-1.5 text-[11px] leading-snug text-slate-600 dark:text-slate-300'
 
 function ServiceDots({ s }: { s: Solicitud }) {
   return (
@@ -70,152 +92,74 @@ function ServiceDots({ s }: { s: Solicitud }) {
 
 // ── Filtros ───────────────────────────────────────────────────────────────────
 interface Filters {
-  search: string
-  estado: string
-  tipo: string
-  modalidad: string
+  busqueda: string
+  estado: string[]
+  tipo: string[]
+  modalidad: string[]
 }
 
 const EMPTY_FILTERS: Filters = {
-  search: '',
-  estado: '',
-  tipo: '',
-  modalidad: '',
+  busqueda: '',
+  estado: [],
+  tipo: [],
+  modalidad: [],
 }
 
-function FilterField({
-  label,
-  value,
+function FilterBar({
+  filters,
   onChange,
+  onClear,
+  total,
+  filtered,
   options,
-  className = '',
 }: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  options: string[]
-  className?: string
-}) {
-  return (
-    <div className={`flex flex-col gap-1 min-w-0 ${className}`}>
-      <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{label}</span>
-      <Select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="py-2.5 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300"
-      >
-        <option value="">Todos</option>
-        {options.map(o => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </Select>
-    </div>
-  )
-}
-
-function FilterSearchField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  className = '',
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  placeholder: string
-  className?: string
-}) {
-  return (
-    <div className={`flex flex-col gap-1 min-w-0 ${className}`}>
-      <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{label}</span>
-      <div className="relative">
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z"
-          />
-        </svg>
-        <input
-          type="text"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full pl-8 pr-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700
-                     bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white
-                     placeholder-slate-400 dark:placeholder-slate-500
-                     focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400
-                     transition-all"
-        />
-      </div>
-    </div>
-  )
-}
-
-function FilterBar({ filters, onChange, onClear, total, filtered }: {
   filters: Filters
   onChange: (f: Filters) => void
   onClear: () => void
   total: number
   filtered: number
+  options: { estados: string[]; tipos: string[]; modalidades: string[] }
 }) {
-  const set = (k: keyof Filters, v: string) => onChange({ ...filters, [k]: v })
+  const set = (k: 'busqueda', v: string) => onChange({ ...filters, [k]: v })
+  const setMulti = (k: 'estado' | 'tipo' | 'modalidad', v: string[]) => onChange({ ...filters, [k]: v })
   const active = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS)
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-4 mb-5 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 pt-1">Filtros</p>
-        {active && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl
-                       text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700
-                       hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            Limpiar
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+    <CollapsibleFilterPanel
+      active={active}
+      onClear={onClear}
+      total={total}
+      filtered={filtered}
+      storageKey="zeppelin.filters.corp.expanded"
+    >
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         <FilterSearchField
           label="Buscar"
-          value={filters.search}
-          onChange={v => set('search', v)}
+          value={filters.busqueda}
+          onChange={v => set('busqueda', v)}
           placeholder="Localizador, cliente o asesor..."
-          className="sm:col-span-2 lg:col-span-2"
+          className="col-span-2 sm:col-span-3 lg:col-span-4"
         />
-        <FilterField label="Estado" value={filters.estado} onChange={v => set('estado', v)} options={[...ESTADOS]} />
-        <FilterField label="Tipo" value={filters.tipo} onChange={v => set('tipo', v)} options={[...TIPOS]} />
-        <FilterField
+        <FilterMultiSelect
+          label="Estado"
+          value={filters.estado}
+          onChange={v => setMulti('estado', v)}
+          options={options.estados}
+        />
+        <FilterMultiSelect
+          label="Tipo"
+          value={filters.tipo}
+          onChange={v => setMulti('tipo', v)}
+          options={options.tipos}
+        />
+        <FilterMultiSelect
           label="Modalidad"
           value={filters.modalidad}
-          onChange={v => set('modalidad', v)}
-          options={[...MODALIDADES]}
+          onChange={v => setMulti('modalidad', v)}
+          options={options.modalidades}
         />
       </div>
-
-      {active && (
-        <p className="text-xs text-slate-400 dark:text-slate-500">
-          Mostrando <span className="font-semibold text-slate-600 dark:text-slate-300">{filtered}</span> de{' '}
-          <span className="font-semibold">{total}</span> registros
-        </p>
-      )}
-    </div>
+    </CollapsibleFilterPanel>
   )
 }
 
@@ -238,9 +182,6 @@ function DetailPanel({ s, onClose, onEdit, onToggleStatus, onAnular, actioning }
   onAnular: () => void
   actioning: boolean
 }) {
-  const fmt   = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
-  const fmtTs = (ts: string) => new Date(ts).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
-
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
@@ -263,11 +204,11 @@ function DetailPanel({ s, onClose, onEdit, onToggleStatus, onAnular, actioning }
               )}
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500">
-              Creado {fmtTs(s.created_at)}
+              Creado {formatDateTimeDDMMYYYY(s.created_at)}
             </p>
             {s.updated_at !== s.created_at && (
               <p className="text-xs text-slate-400 dark:text-slate-500">
-                Actualizado {fmtTs(s.updated_at)}
+                Actualizado {formatDateTimeDDMMYYYY(s.updated_at)}
               </p>
             )}
           </div>
@@ -287,7 +228,7 @@ function DetailPanel({ s, onClose, onEdit, onToggleStatus, onAnular, actioning }
               Información básica
             </h3>
             <div className="grid grid-cols-2 gap-4">
-              <DetailRow label="Fecha" value={fmt(s.fecha)} />
+              <DetailRow label="Fecha" value={formatDateDDMMYYYY(s.fecha)} />
               <DetailRow label="Localizador" value={s.localizador} />
               <DetailRow label="Cliente" value={<span className="line-clamp-2">{s.cliente}</span>} />
               <DetailRow label="Asesor" value={s.asesor} />
@@ -430,7 +371,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
     setLoading(true)
     setError(null)
     const query = supabase
-      .from('solicitudes')
+      .from('th_solicitud_corporativos')
       .select('*')
       .order('fecha', { ascending: false })
       .order('created_at', { ascending: false })
@@ -447,10 +388,37 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
+  const filterOptions = useMemo(() => {
+    const estadosSet = new Set<string>(ESTADOS)
+    const tiposSet = new Set<string>(TIPOS)
+    const modalidadesSet = new Set<string>(MODALIDADES)
+    for (const s of solicitudes) {
+      estadosSet.add(s.estado)
+      tiposSet.add(s.tipo)
+      modalidadesSet.add(s.modalidad)
+    }
+    const sortStr = (a: string, b: string) => a.localeCompare(b, 'es')
+    return {
+      estados: [...estadosSet].sort((a, b) => {
+        const ia = CORP_ESTADO_PIPELINE.indexOf(a as EstadoSolicitud)
+        const ib = CORP_ESTADO_PIPELINE.indexOf(b as EstadoSolicitud)
+        if (ia === -1 && ib === -1) return sortStr(a, b)
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
+      }),
+      tipos: [...tiposSet].sort(sortStr),
+      modalidades: [...modalidadesSet].sort(sortStr),
+    }
+  }, [solicitudes])
+
   const filtered = useMemo(() => {
     return solicitudes.filter(s => {
-      if (filters.search) {
-        const q = filters.search.toLowerCase()
+      if (!matchesMulti(filters.estado, s.estado)) return false
+      if (!matchesMulti(filters.tipo, s.tipo)) return false
+      if (!matchesMulti(filters.modalidad, s.modalidad)) return false
+      if (filters.busqueda) {
+        const q = filters.busqueda.toLowerCase().trim()
         if (
           !s.localizador.toLowerCase().includes(q) &&
           !s.cliente.toLowerCase().includes(q) &&
@@ -459,12 +427,14 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
           return false
         }
       }
-      if (filters.estado && s.estado !== filters.estado) return false
-      if (filters.tipo && s.tipo !== filters.tipo) return false
-      if (filters.modalidad && s.modalidad !== filters.modalidad) return false
       return true
     })
   }, [solicitudes, filters])
+
+  const estadoKpis = useMemo(
+    () => buildEstadoKpiItems(filtered, CORP_ESTADO_PIPELINE),
+    [filtered]
+  )
 
   const updateLocal = (id: string, patch: Partial<Solicitud>) => {
     setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s))
@@ -481,7 +451,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
     setActioning(true)
     const newStatus = !detail.status
     const { error } = await supabase
-      .from('solicitudes')
+      .from('th_solicitud_corporativos')
       .update({ status: newStatus })
       .eq('id', detail.id)
     if (error) setError(error.message)
@@ -496,7 +466,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
     if (!detail) return
     setActioning(true)
     const { error } = await supabase
-      .from('solicitudes')
+      .from('th_solicitud_corporativos')
       .update({ estado: 'ANULADO' })
       .eq('id', detail.id)
     if (error) setError(error.message)
@@ -506,9 +476,6 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
     }
     setActioning(false)
   }
-
-  const fmt = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
-  const fmtTs = (ts: string) => new Date(ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
 
   const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS)
   const countLabel = loading
@@ -533,9 +500,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-start justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Solicitud Corporativo
-            </h1>
+            <PageTitle>Solicitud Corporativo</PageTitle>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{countLabel}</p>
           </div>
           <Button onClick={onNew} size="md">
@@ -550,12 +515,28 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
         {error      && <Alert variant="error"   className="mb-5">{error}</Alert>}
 
         {!loading && solicitudes.length > 0 && (
+          <EstadoKpiBar
+            items={estadoKpis}
+            total={filtered.length}
+            activeEstados={filters.estado}
+            badgeVariant={corpBadgeVariant}
+            filteredView={hasActiveFilters}
+            onToggleEstado={nombre => {
+              const only = filters.estado.length === 1 && filters.estado[0] === nombre
+              setFilters({ ...filters, estado: only ? [] : [nombre] })
+            }}
+            onClearEstadoFilter={() => setFilters({ ...filters, estado: [] })}
+          />
+        )}
+
+        {!loading && solicitudes.length > 0 && (
           <FilterBar
             filters={filters}
             onChange={setFilters}
             onClear={() => setFilters(EMPTY_FILTERS)}
             total={solicitudes.length}
             filtered={filtered.length}
+            options={filterOptions}
           />
         )}
 
@@ -591,7 +572,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm overflow-x-auto">
 
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-[960px] text-xs">
+              <table className="w-full min-w-[960px] text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 text-left">
                     <th className={TH}>Estado</th>
@@ -622,10 +603,10 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                         </Badge>
                       </td>
                       <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
-                        {fmt(s.fecha)}
+                        {formatDateDDMMYYYY(s.fecha)}
                       </td>
                       <td className={TD}>
-                        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">
                           {s.localizador}
                         </span>
                       </td>
@@ -636,15 +617,15 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                         >
                           {s.cliente}
                         </p>
-                        <p className="text-[11px] text-slate-400 truncate">{s.asesor}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{s.asesor}</p>
                       </td>
                       <td className={`${TD} text-slate-500 whitespace-nowrap`}>{s.tipo}</td>
                       <td className={TD}>
                         <ServiceDots s={s} />
                       </td>
                       <td className={`${TD} text-slate-500 whitespace-nowrap`}>{s.modalidad}</td>
-                      <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap text-[11px]`}>
-                        {fmtTs(s.updated_at)}
+                      <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
+                        {formatDateTimeDDMMYYYY(s.updated_at)}
                       </td>
                       <td className={`${TD} text-right`} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
@@ -681,7 +662,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                           <button
                             onClick={async () => {
                               const newStatus = !s.status
-                              const { error } = await supabase.from('solicitudes').update({ status: newStatus }).eq('id', s.id)
+                              const { error } = await supabase.from('th_solicitud_corporativos').update({ status: newStatus }).eq('id', s.id)
                               if (!error) {
                                 updateLocal(s.id, { status: newStatus })
                                 flash(newStatus ? 'Solicitud activada.' : 'Solicitud inactivada.')
@@ -739,7 +720,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                     <div>
                       <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-medium">Localizador</span>
                       <p className="font-mono text-slate-800 dark:text-slate-200 font-semibold">{s.localizador}</p>
-                      <p className="text-slate-400 dark:text-slate-500 text-[11px]">{fmt(s.fecha)}</p>
+                      <p className="text-slate-400 dark:text-slate-500 text-[11px]">{formatDateDDMMYYYY(s.fecha)}</p>
                     </div>
                     <div>
                       <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-medium">Modalidad</span>
@@ -747,7 +728,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                     </div>
                     <div>
                       <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-medium">Actualizado</span>
-                      <p className="text-slate-400 dark:text-slate-500 text-[11px]">{fmtTs(s.updated_at)}</p>
+                      <p className="text-slate-400 dark:text-slate-500 text-[11px]">{formatDateTimeDDMMYYYY(s.updated_at)}</p>
                     </div>
                   </div>
 
@@ -783,7 +764,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                     <button
                       onClick={async () => {
                         const newStatus = !s.status
-                        const { error } = await supabase.from('solicitudes').update({ status: newStatus }).eq('id', s.id)
+                        const { error } = await supabase.from('th_solicitud_corporativos').update({ status: newStatus }).eq('id', s.id)
                         if (!error) {
                           updateLocal(s.id, { status: newStatus })
                           flash(newStatus ? 'Solicitud activada.' : 'Solicitud inactivada.')

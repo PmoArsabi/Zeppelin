@@ -26,7 +26,7 @@ export default function LugarMiceSelect({ lugares, value, onChange, error, readO
 
   return (
     <div
-      className="flex flex-wrap gap-2"
+      className="flex flex-nowrap gap-2"
       role="group"
       aria-label="Tipo de lugar del evento"
     >
@@ -39,10 +39,10 @@ export default function LugarMiceSelect({ lugares, value, onChange, error, readO
             onClick={() => toggle(lugar.nombre)}
             disabled={readOnly}
             className={`
-              px-4 py-2.5 text-sm font-medium rounded-xl border transition-all duration-150
+              shrink-0 px-3 py-2 text-sm font-medium rounded-xl border transition-all duration-150
               ${selected
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/20'
-                : 'bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50'
+                ? 'bg-orange-500 text-white border-orange-500 shadow-sm shadow-orange-500/25'
+                : 'bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-orange-300 dark:hover:border-orange-500/50'
               }
               ${readOnly ? 'cursor-default opacity-100' : ''}
               ${error && !selected ? 'border-rose-300 dark:border-rose-500/50' : ''}

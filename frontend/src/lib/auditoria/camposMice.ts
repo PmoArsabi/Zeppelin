@@ -13,7 +13,7 @@ import type { CampoAuditoria } from './types'
 
 function servicioLabel(id: string, catalog: MiceCatalogos): string {
   const s = catalog.servicios.find(x => x.id === id)
-  return s ? `${s.id} — ${s.label}` : id
+  return s ? s.label : id
 }
 
 function destinoLabel(d: DestinoMice): string {
@@ -37,16 +37,44 @@ export function buildAuditoriaMiceObservacion(
   }
 
   const fmtFecha = (v: unknown) => formatFechaAuditoria(v)
+  if (antes.cliente_id !== despues.cliente_id) {
+    push(
+      lineaModificado(
+        'Cliente',
+        antes.cliente.trim() || VACIO_AUDITORIA,
+        despues.cliente.trim() || VACIO_AUDITORIA
+      )
+    )
+  }
+
+  if (antes.probabilidad_id !== despues.probabilidad_id) {
+    push(
+      lineaModificado(
+        'Probabilidad',
+        antes.probabilidad.trim() || VACIO_AUDITORIA,
+        despues.probabilidad.trim() || VACIO_AUDITORIA
+      )
+    )
+  }
+
+  if (antes.estado_id !== despues.estado_id) {
+    push(
+      lineaModificado(
+        'Estado',
+        antes.estado.trim() || VACIO_AUDITORIA,
+        despues.estado.trim() || VACIO_AUDITORIA
+      )
+    )
+  }
+
   const campos: CampoAuditoria<SolicitudMiceForm>[] = [
     { etiqueta: 'Año', valor: f => f.anio },
-    { etiqueta: 'Cliente', valor: f => f.cliente },
+    { etiqueta: 'Responsable', valor: f => f.responsable_nombre },
     { etiqueta: 'Sector', valor: f => f.sector },
     { etiqueta: 'MZP', valor: f => f.mzp },
     { etiqueta: 'Nombre', valor: f => f.nombre },
     { etiqueta: 'Fecha inicio', valor: f => f.inicio, formato: fmtFecha },
     { etiqueta: 'Fecha fin', valor: f => f.fin, formato: fmtFecha },
-    { etiqueta: 'Estado', valor: f => f.estado },
-    { etiqueta: 'Probabilidad', valor: f => f.probabilidad },
     { etiqueta: 'Fecha solicitud', valor: f => f.fecha_solicitud, formato: fmtFecha },
     { etiqueta: 'Fecha entrega', valor: f => f.fecha_entrega, formato: fmtFecha },
     { etiqueta: 'PAX', valor: f => f.pax },

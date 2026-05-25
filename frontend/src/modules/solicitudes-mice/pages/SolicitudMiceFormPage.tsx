@@ -1,14 +1,15 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
-import { fetchClientesZeppelin } from '@/lib/clientes'
+import { fetchClientesZeppelinCatalog, clientesToIdOptions, buildClienteNombreById } from '@/lib/clientes'
+import { parseDecimalCO } from '@/lib/decimalFormat'
 import { useAuth } from '@/context/AuthContext'
 import AppShell from '@/components/layout/AppShell'
 import { Card } from '@/components/ui/Card'
 import FormField from '@/components/ui/FormField'
+import PageTitle from '@/components/ui/PageTitle'
 import Input from '@/components/ui/Input'
 import DecimalInput from '@/components/ui/DecimalInput'
 import YearInput from '@/components/ui/YearInput'
-import MzpInput from '@/components/ui/MzpInput'
 import CustomSelect from '@/components/ui/CustomSelect'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
@@ -28,7 +29,10 @@ import {
   saveSolicitudMice,
   fetchSectoresMice,
   fetchUsuariosTiqueteador,
+  findTiqueteadorNaOption,
+  formatSectorNombre,
 } from '../services/solicitudesMiceService'
+import { resolveNextMzpCode } from '../services/mzpConsecutivoService'
 import { fetchMiceCatalogos } from '../services/miceCatalogosService'
 import DestinosMiceEditor from '../components/DestinosMiceEditor'
 import LugarMiceSelect from '../components/LugarMiceSelect'
@@ -42,20 +46,63 @@ function cloneFormMice(f: SolicitudMiceForm): SolicitudMiceForm {
 
 type Errors = Partial<Record<keyof SolicitudMiceForm, string>>
 
-function validate(form: SolicitudMiceForm, catalog: MiceCatalogos): Errors {
+function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, requireCotizacion: boolean): Errors {
   const e: Errors = {}
   if (!catalog.anios.includes(form.anio)) {
     e.anio = 'Seleccione un año válido.'
   }
-  if (!form.cliente.trim()) e.cliente = 'Seleccione un cliente.'
+  if (!form.responsable_id.trim()) e.responsable_id = 'Seleccione un responsable.'
+  if (form.cliente_id == null) e.cliente_id = 'Seleccione un cliente.'
+  if (form.sector_id == null && !form.sector.trim()) e.sector = 'Seleccione un sector.'
   if (!form.nombre.trim()) e.nombre = 'El nombre del evento es obligatorio.'
-  if (!form.estado) e.estado = 'Seleccione un estado.'
+  if (form.estado_id == null && !form.estado.trim()) e.estado = 'Seleccione un estado.'
+  else if (form.estado_id != null && !catalog.estados.some(x => x.id === form.estado_id)) {
+    e.estado = 'Seleccione un estado válido.'
+  }
   if (!form.fecha_solicitud) e.fecha_solicitud = 'La fecha de solicitud es obligatoria.'
   if (form.inicio && form.fin && form.fin < form.inicio) {
     e.fin = 'Debe ser igual o posterior a la fecha de inicio.'
   }
-  if (form.fecha_entrega && form.fecha_solicitud && form.fecha_entrega < form.fecha_solicitud) {
-    e.fecha_entrega = 'Debe ser igual o posterior a la fecha de solicitud.'
+  if (requireCotizacion) {
+    if (!form.valor_cotizado.trim()) {
+      e.valor_cotizado = 'Ingrese el valor cotizado.'
+    } else if (parseDecimalCO(form.valor_cotizado) == null) {
+      e.valor_cotizado = 'Valor cotizado inválido.'
+    }
+    if (!form.utilidad_proyectada.trim()) {
+      e.utilidad_proyectada = 'Ingrese la utilidad proyectada.'
+    } else if (parseDecimalCO(form.utilidad_proyectada) == null) {
+      e.utilidad_proyectada = 'Utilidad proyectada inválida.'
+    }
+    if (!form.fecha_entrega) {
+      e.fecha_entrega = 'La fecha de entrega es obligatoria.'
+    } else if (form.fecha_solicitud && form.fecha_entrega < form.fecha_solicitud) {
+      e.fecha_entrega = 'Debe ser igual o posterior a la fecha de solicitud.'
+    }
+    if (form.probabilidad_id == null && !form.probabilidad.trim()) {
+      e.probabilidad = 'Seleccione una probabilidad.'
+    } else if (
+      form.probabilidad_id != null &&
+      !catalog.probabilidades.some(p => p.id === form.probabilidad_id)
+    ) {
+      e.probabilidad = 'Seleccione una probabilidad válida.'
+    }
+  } else {
+    if (form.valor_cotizado.trim() && parseDecimalCO(form.valor_cotizado) == null) {
+      e.valor_cotizado = 'Valor cotizado inválido.'
+    }
+    if (form.utilidad_proyectada.trim() && parseDecimalCO(form.utilidad_proyectada) == null) {
+      e.utilidad_proyectada = 'Utilidad proyectada inválida.'
+    }
+    if (form.fecha_entrega && form.fecha_solicitud && form.fecha_entrega < form.fecha_solicitud) {
+      e.fecha_entrega = 'Debe ser igual o posterior a la fecha de solicitud.'
+    }
+    if (
+      form.probabilidad_id != null &&
+      !catalog.probabilidades.some(p => p.id === form.probabilidad_id)
+    ) {
+      e.probabilidad = 'Seleccione una probabilidad válida.'
+    }
   }
   if (form.pax.trim()) {
     const p = parseInt(form.pax, 10)
@@ -72,6 +119,9 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos): Errors {
   }
   if (form.destinos.length === 0) {
     e.destinos = 'Agregue al menos un destino (país y ciudad).'
+  }
+  if (!form.tiqueteador_user_id.trim()) {
+    e.tiqueteador_user_id = 'Seleccione un tiqueteador.'
   }
   return e
 }
@@ -127,27 +177,33 @@ function FormSection({
   step,
   title,
   description,
+  headerAside,
   children,
 }: {
   step?: number
   title: string
   description?: string
+  /** Contenido a la derecha del título (ej. código MZP) */
+  headerAside?: ReactNode
   children: ReactNode
 }) {
   return (
     <section className="px-5 sm:px-7 py-6">
-      <div className="flex items-center gap-3 mb-5">
-        {step != null && (
-          <span className="shrink-0 w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold flex items-center justify-center ring-1 ring-indigo-200 dark:ring-indigo-500/30">
-            {step}
-          </span>
-        )}
-        <div>
-          <h3 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">{title}</h3>
-          {description && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
+      <div className="flex items-center justify-between gap-4 mb-5 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
+          {step != null && (
+            <span className="shrink-0 w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold flex items-center justify-center ring-1 ring-indigo-200 dark:ring-indigo-500/30">
+              {step}
+            </span>
           )}
+          <div className="min-w-0">
+            <PageTitle as="h3" size="section">{title}</PageTitle>
+            {description && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
+            )}
+          </div>
         </div>
+        {headerAside}
       </div>
       {children}
     </section>
@@ -172,12 +228,16 @@ export default function SolicitudMiceFormPage({
   const { user } = useAuth()
   const isEdit = editTarget !== null
   const lock = readOnly
+  const mzpAuto = !isEdit && !lock
+  /** En edición no se modifican cliente, sector ni fecha de solicitud (dato de registro). */
+  const lockRegistro = isEdit && !lock
 
   const [form, setForm] = useState<SolicitudMiceForm>(INITIAL_FORM_MICE)
   const [errors, setErrors] = useState<Errors>({})
   const [saveFeedback, setSaveFeedback] = useState<SaveFeedbackState | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [clientes, setClientes] = useState<{ value: string; label: string }[]>([])
+  const [clientesCatalog, setClientesCatalog] = useState<{ id: number; fullname: string }[]>([])
   const [clientesError, setClientesError] = useState<string | null>(null)
   const [sectores, setSectores] = useState<string[]>([])
   const [usuariosTiqueteador, setUsuariosTiqueteador] = useState<{ value: string; label: string }[]>([])
@@ -185,14 +245,17 @@ export default function SolicitudMiceFormPage({
   const [catalog, setCatalog] = useState<MiceCatalogos>(MICE_CATALOGOS_VACIOS)
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogWarning, setCatalogWarning] = useState<string | null>(null)
-  const [editLoading, setEditLoading] = useState(false)
+  const [editLoading, setEditLoading] = useState(() => editTarget !== null)
   const [pendingSeguimiento, setPendingSeguimiento] = useState('')
   const [solicitudId, setSolicitudId] = useState<string | null>(editTarget?.id ?? null)
   const [formBaseline, setFormBaseline] = useState<SolicitudMiceForm | null>(null)
   const [activeTab, setActiveTab] = useState<FormTabId>('cotizacion')
+  const [mzpLoading, setMzpLoading] = useState(false)
 
   const formBusy = saveFeedback !== null
   const isSaving = saveFeedback?.status === 'saving'
+  /** Edición: esperar catálogo + relaciones (servicios, destinos…) sin banner parpadeante */
+  const formHydrating = isEdit && (catalogLoading || editLoading)
 
   useEffect(() => {
     if (saveFeedback?.status !== 'success') return
@@ -202,16 +265,27 @@ export default function SolicitudMiceFormPage({
 
   useEffect(() => {
     Promise.all([
-      fetchClientesZeppelin(),
+      fetchClientesZeppelinCatalog(),
       fetchSectoresMice(),
       fetchUsuariosTiqueteador(),
       fetchMiceCatalogos(),
     ]).then(([clientesRes, sectoresList, usuariosRes, miceCat]) => {
       if (clientesRes.error) setClientesError(clientesRes.error)
-      setClientes(clientesRes.data)
+      setClientesCatalog(clientesRes.data)
+      setClientes(clientesToIdOptions(clientesRes.data))
       setSectores(sectoresList)
       if (usuariosRes.error) setUsuariosTiqueteadorError(usuariosRes.error)
       setUsuariosTiqueteador(usuariosRes.data)
+      if (!editTarget) {
+        const na = findTiqueteadorNaOption(usuariosRes.data)
+        if (na) {
+          setForm(prev =>
+            prev.tiqueteador_user_id
+              ? prev
+              : { ...prev, tiqueteador_user_id: na.value, tiqueteador_asignado: na.label }
+          )
+        }
+      }
       setCatalog(miceCat.data)
       if (miceCat.error) setCatalogWarning(miceCat.error)
       if (miceCat.data.anios.length > 0 && !editTarget) {
@@ -225,18 +299,26 @@ export default function SolicitudMiceFormPage({
   }, [editTarget])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || editTarget) return
     supabase
-      .from('profiles')
+      .from('td_profiles')
       .select('display_name')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
-        if (data?.display_name) {
-          setForm(prev => ({ ...prev, responsable_nombre: data.display_name }))
-        }
+        setForm(prev => ({
+          ...prev,
+          responsable_id: user.id,
+          responsable_nombre: data?.display_name?.trim() || prev.responsable_nombre || user.email || '',
+        }))
       })
-  }, [user])
+  }, [user, editTarget])
+
+  const profileNombreById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const u of usuariosTiqueteador) m.set(u.value, u.label)
+    return m
+  }, [usuariosTiqueteador])
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -244,19 +326,45 @@ export default function SolicitudMiceFormPage({
     setPendingSeguimiento('')
     setFormBaseline(null)
     setActiveTab('cotizacion')
+    setEditLoading(editTarget !== null)
   }, [editTarget])
 
   useEffect(() => {
     if (!editTarget || catalogLoading) return
-    setEditLoading(true)
-    loadSolicitudForEdit(editTarget, catalog).then(({ form: loaded, error }) => {
+    let cancelled = false
+    loadSolicitudForEdit(
+      editTarget,
+      catalog,
+      buildClienteNombreById(clientesCatalog),
+      profileNombreById
+    ).then(({ form: loaded, error }) => {
+      if (cancelled) return
       setForm(loaded)
       setFormBaseline(cloneFormMice(loaded))
       if (error) setCatalogWarning(prev => prev ? `${prev} ${error}` : error)
       setEditLoading(false)
     })
-  }, [editTarget, catalog, catalogLoading])
+    return () => {
+      cancelled = true
+    }
+  }, [editTarget, catalog, catalogLoading, clientesCatalog, profileNombreById])
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  const applyNextMzp = useCallback(async () => {
+    if (!mzpAuto) return
+    setMzpLoading(true)
+    const { code, error } = await resolveNextMzpCode()
+    if (code) setForm(prev => ({ ...prev, mzp: code }))
+    if (error) {
+      setCatalogWarning(prev => (prev ? `${prev} ${error}` : error))
+    }
+    setMzpLoading(false)
+  }, [mzpAuto])
+
+  useEffect(() => {
+    if (!mzpAuto) return
+    void applyNextMzp()
+  }, [mzpAuto, applyNextMzp])
 
   const minAnio = catalog.anios.length ? Math.min(...catalog.anios) : 2025
   const maxAnio = catalog.anios.length ? Math.max(...catalog.anios) : 2026
@@ -302,15 +410,70 @@ export default function SolicitudMiceFormPage({
     setErrors(prev => ({ ...prev, fin: fechaFinError(fecha, form.inicio) }))
   }
 
+  const responsableOptions = useMemo(() => {
+    const id = form.responsable_id
+    if (id && !usuariosTiqueteador.some(u => u.value === id)) {
+      const label = form.responsable_nombre.trim() || 'Responsable anterior'
+      return [{ value: id, label }, ...usuariosTiqueteador]
+    }
+    return usuariosTiqueteador
+  }, [usuariosTiqueteador, form.responsable_id, form.responsable_nombre])
+
+  const setResponsable = (userId: string) => {
+    const usuario = usuariosTiqueteador.find(u => u.value === userId)
+    setForm(prev => ({
+      ...prev,
+      responsable_id: userId,
+      responsable_nombre: usuario?.label ?? (userId ? prev.responsable_nombre : ''),
+    }))
+    if (errors.responsable_id) {
+      setErrors(prev => ({ ...prev, responsable_id: undefined, responsable_nombre: undefined }))
+    }
+  }
+
   const tiqueteadorOptions = useMemo(() => {
-    const base = [{ value: '', label: 'No aplica' }, ...usuariosTiqueteador]
     const id = form.tiqueteador_user_id
     if (id && !usuariosTiqueteador.some(u => u.value === id)) {
       const label = form.tiqueteador_asignado.trim() || 'Usuario anterior'
-      return [...base, { value: id, label }]
+      return [{ value: id, label }, ...usuariosTiqueteador]
+    }
+    return usuariosTiqueteador
+  }, [usuariosTiqueteador, form.tiqueteador_user_id, form.tiqueteador_asignado])
+
+  const sectorOptions = useMemo(() => {
+    const base = catalog.sectores.map(s => ({
+      value: String(s.id),
+      label: formatSectorNombre(s.nombre),
+    }))
+    if (form.sector_id != null && !base.some(o => o.value === String(form.sector_id))) {
+      return [{ value: String(form.sector_id), label: form.sector || 'Sector anterior' }, ...base]
     }
     return base
-  }, [usuariosTiqueteador, form.tiqueteador_user_id, form.tiqueteador_asignado])
+  }, [catalog.sectores, form.sector_id, form.sector])
+
+  const clienteOptions = useMemo(() => {
+    const base = clientesToIdOptions(clientesCatalog)
+    if (form.cliente_id != null && !base.some(o => o.value === String(form.cliente_id))) {
+      return [{ value: String(form.cliente_id), label: form.cliente || 'Cliente anterior' }, ...base]
+    }
+    return base.length > 0 ? base : clientes
+  }, [clientesCatalog, clientes, form.cliente_id, form.cliente])
+
+  const estadoOptions = useMemo(() => {
+    const base = catalog.estados.map(s => ({ value: String(s.id), label: s.nombre }))
+    if (form.estado_id != null && !base.some(o => o.value === String(form.estado_id))) {
+      return [{ value: String(form.estado_id), label: form.estado || 'Estado anterior' }, ...base]
+    }
+    return base
+  }, [catalog.estados, form.estado_id, form.estado])
+
+  const probabilidadOptions = useMemo(() => {
+    const base = catalog.probabilidades.map(p => ({ value: String(p.id), label: p.nombre }))
+    if (form.probabilidad_id != null && !base.some(o => o.value === String(form.probabilidad_id))) {
+      return [{ value: String(form.probabilidad_id), label: form.probabilidad || 'Probabilidad anterior' }, ...base]
+    }
+    return base
+  }, [catalog.probabilidades, form.probabilidad_id, form.probabilidad])
 
   const setTiqueteador = (userId: string) => {
     const usuario = usuariosTiqueteador.find(u => u.value === userId)
@@ -328,7 +491,7 @@ export default function SolicitudMiceFormPage({
     e.preventDefault()
     if (lock || formBusy) return
     setSubmitError(null)
-    const v = validate(form, catalog)
+    const v = validate(form, catalog, isEdit)
     if (Object.keys(v).length > 0) {
       setErrors(v)
       setActiveTab('cotizacion')
@@ -360,7 +523,7 @@ export default function SolicitudMiceFormPage({
       )
       if (error) {
         const detail = error.includes('does not exist') || error.includes('schema cache')
-          ? 'La tabla solicitudes_mice no existe aún. Ejecuta la migración SQL en Supabase (ver database/migrations/).'
+          ? 'La tabla th_solicitud_mice no existe aún. Ejecuta database/MICE_LIMPIAR_COLUMNAS_CABECERA.sql en Supabase.'
           : error
         setSubmitError(detail)
         setSaveFeedback({ status: 'error', title: 'No se pudo guardar', detail })
@@ -416,34 +579,139 @@ export default function SolicitudMiceFormPage({
         {catalogWarning && <Alert variant="info" className="mb-6">{catalogWarning}</Alert>}
         {clientesError && <Alert variant="error" className="mb-6">{clientesError}</Alert>}
         {usuariosTiqueteadorError && <Alert variant="error" className="mb-6">{usuariosTiqueteadorError}</Alert>}
-        {editLoading && <Alert variant="info" className="mb-6">Cargando datos de la cotización...</Alert>}
 
         <form onSubmit={handleSubmit} noValidate>
           <Card
-            className={`overflow-hidden ${formBusy ? 'pointer-events-none select-none opacity-70' : ''}`}
-            aria-busy={formBusy}
+            className={`overflow-hidden transition-opacity duration-150 ${
+              formBusy || formHydrating ? 'pointer-events-none select-none opacity-70' : ''
+            }`}
+            aria-busy={formBusy || formHydrating}
           >
             <FormTabs active={activeTab} onChange={setActiveTab} disabled={formBusy} />
 
             {activeTab === 'cotizacion' && (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
 
-          <FormSection step={1} title="Datos del cliente" description="Cliente, año, sector y fechas de gestión">
+          <FormSection
+            step={1}
+            title="Información General"
+            description="Cliente, responsable, fechas de gestión y datos del evento"
+            headerAside={
+              <div className="shrink-0 pl-4 border-l border-slate-200 dark:border-slate-700 text-right">
+                <p
+                  className={`font-mono text-xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400 ${
+                    mzpLoading && mzpAuto ? 'opacity-50' : ''
+                  }`}
+                  aria-label="Código MZP"
+                  aria-live="polite"
+                >
+                  {mzpLoading && mzpAuto ? '…' : form.mzp || '—'}
+                </p>
+                {errors.mzp && (
+                  <p className="text-[10px] text-rose-500 dark:text-rose-400 mt-1">{errors.mzp}</p>
+                )}
+              </div>
+            }
+          >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <FormField label="Cliente" required htmlFor="cliente" error={errors.cliente}
-                  className="sm:col-span-2 lg:col-span-2">
-                  <CustomSelect id="cliente" value={form.cliente} onChange={v => set('cliente', v)}
+                <FormField label="Cliente" required htmlFor="cliente_id" error={errors.cliente_id}
+                  className="sm:col-span-2 lg:col-span-2 min-w-0">
+                  <CustomSelect
+                    id="cliente_id"
+                    value={form.cliente_id != null ? String(form.cliente_id) : ''}
+                    onChange={v => {
+                      const id = v ? Number(v) : null
+                      const item = clientesCatalog.find(c => c.id === id)
+                      setForm(prev => ({
+                        ...prev,
+                        cliente_id: id,
+                        cliente: item?.fullname ?? prev.cliente,
+                      }))
+                    }}
                     placeholder={catalogLoading ? 'Cargando...' : 'Seleccionar cliente...'}
-                    error={!!errors.cliente} disabled={lock || catalogLoading || !!clientesError} searchable
-                    options={clientes} />
+                    error={!!errors.cliente_id}
+                    disabled={lock || lockRegistro || catalogLoading || !!clientesError}
+                    searchable
+                    options={clienteOptions}
+                  />
                 </FormField>
-                <FormField label="Sector" htmlFor="sector" optional className="sm:col-span-2 lg:col-span-2">
-                  <CustomSelect id="sector" value={form.sector} onChange={v => set('sector', v)}
+                <FormField label="Sector" htmlFor="sector" required error={errors.sector} className="lg:col-span-1 min-w-0">
+                  <CustomSelect
+                    id="sector"
+                    value={form.sector_id != null ? String(form.sector_id) : ''}
+                    onChange={v => {
+                      const id = v ? Number(v) : null
+                      const item = catalog.sectores.find(s => s.id === id)
+                      setForm(prev => ({
+                        ...prev,
+                        sector_id: id,
+                        sector: item ? formatSectorNombre(item.nombre) : prev.sector,
+                      }))
+                    }}
                     placeholder="Seleccionar sector..."
-                    options={[{ value: '', label: '—' }, ...sectores.map(s => ({ value: s, label: s }))]}
-                    disabled={lock} />
+                    error={!!errors.sector}
+                    options={sectorOptions.length > 0 ? sectorOptions : sectores.map(s => ({ value: s, label: s }))}
+                    disabled={lock || lockRegistro}
+                  />
                 </FormField>
-                <FormField label="Año" required htmlFor="anio" error={errors.anio}>
+                <FormField label="Estado" required htmlFor="estado" error={errors.estado}
+                  className="lg:col-span-1 min-w-0">
+                  <CustomSelect
+                    id="estado"
+                    value={form.estado_id != null ? String(form.estado_id) : ''}
+                    onChange={v => {
+                      const id = v ? Number(v) : null
+                      const item = catalog.estados.find(e => e.id === id)
+                      setForm(prev => ({
+                        ...prev,
+                        estado_id: id,
+                        estado: (item?.nombre ?? prev.estado) as SolicitudMiceForm['estado'],
+                      }))
+                    }}
+                    placeholder="Seleccionar estado..."
+                    error={!!errors.estado}
+                    options={estadoOptions}
+                    disabled={lock || catalogLoading}
+                  />
+                </FormField>
+                <FormField
+                  label="Responsable"
+                  required
+                  htmlFor="responsable"
+                  error={errors.responsable_id}
+                  className="sm:col-span-2 lg:col-span-1 min-w-0"
+                >
+                  <CustomSelect
+                    id="responsable"
+                    value={form.responsable_id ?? ''}
+                    onChange={setResponsable}
+                    placeholder={
+                      usuariosTiqueteadorError
+                        ? 'Error al cargar usuarios'
+                        : usuariosTiqueteador.length === 0
+                          ? 'Sin usuarios con nombre'
+                          : 'Seleccionar responsable...'
+                    }
+                    options={responsableOptions}
+                    searchable
+                    error={!!errors.responsable_id}
+                    disabled={lock || !!usuariosTiqueteadorError}
+                  />
+                </FormField>
+                <FormField label="Nombre (evento / grupo)" required htmlFor="nombre" error={errors.nombre}
+                  className="sm:col-span-2 lg:col-span-3 min-w-0">
+                  <Input id="nombre" type="text" value={form.nombre} onChange={e => set('nombre', e.target.value)}
+                    placeholder="Nombre del evento MICE" error={!!errors.nombre} disabled={lock} />
+                </FormField>
+                <FormField label="Fecha solicitud" required htmlFor="fecha_solicitud" error={errors.fecha_solicitud}
+                  className="lg:col-span-1 min-w-0">
+                  <Input id="fecha_solicitud" type="date" value={form.fecha_solicitud}
+                    onChange={e => setFechaSolicitud(e.target.value)} error={!!errors.fecha_solicitud}
+                    disabled={lock || lockRegistro}
+                    className="scheme-light dark:scheme-dark" />
+                </FormField>
+                <FormField label="Año Evento" required htmlFor="anio" error={errors.anio}
+                  className="lg:col-span-1 min-w-0">
                   <YearInput
                     id="anio"
                     value={form.anio}
@@ -454,35 +722,33 @@ export default function SolicitudMiceFormPage({
                     disabled={lock || catalogLoading}
                   />
                 </FormField>
-                <FormField label="MZP" htmlFor="mzp" required error={errors.mzp} hint="Prefijo MZP + hasta 3 dígitos">
-                  <MzpInput
-                    id="mzp"
-                    value={form.mzp}
-                    onChange={v => set('mzp', v)}
-                    error={!!errors.mzp}
+                <FormField label="Fecha inicio" htmlFor="inicio" optional error={errors.inicio}
+                  className="lg:col-span-1 min-w-0">
+                  <Input
+                    id="inicio"
+                    type="date"
+                    value={form.inicio}
+                    onChange={e => setInicio(e.target.value)}
+                    error={!!errors.inicio}
                     disabled={lock}
+                    className="scheme-light dark:scheme-dark"
                   />
                 </FormField>
-                <FormField label="Fecha solicitud" required htmlFor="fecha_solicitud" error={errors.fecha_solicitud}>
-                  <Input id="fecha_solicitud" type="date" value={form.fecha_solicitud}
-                    onChange={e => setFechaSolicitud(e.target.value)} error={!!errors.fecha_solicitud}
-                    disabled={lock}
-                    className="scheme-light dark:scheme-dark" />
-                </FormField>
                 <FormField
-                  label="Fecha entrega"
-                  htmlFor="fecha_entrega"
+                  label="Fecha fin"
+                  htmlFor="fin"
                   optional
-                  error={errors.fecha_entrega}
-                  hint={form.fecha_solicitud ? `Mínimo: ${form.fecha_solicitud}` : undefined}
+                  error={errors.fin}
+                  className="lg:col-span-1 min-w-0"
+                  hint={form.inicio ? `Mínimo: ${form.inicio}` : undefined}
                 >
                   <Input
-                    id="fecha_entrega"
+                    id="fin"
                     type="date"
-                    value={form.fecha_entrega}
-                    min={form.fecha_solicitud || undefined}
-                    onChange={e => setFechaEntrega(e.target.value)}
-                    error={!!errors.fecha_entrega}
+                    value={form.fin}
+                    min={form.inicio || undefined}
+                    onChange={e => setFin(e.target.value)}
+                    error={!!errors.fin}
                     disabled={lock}
                     className="scheme-light dark:scheme-dark"
                   />
@@ -490,101 +756,7 @@ export default function SolicitudMiceFormPage({
               </div>
           </FormSection>
 
-          <FormSection step={2} title="Información general del evento" description="Nombre, fechas del evento, estado y cotización">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <FormField label="Nombre (evento / grupo)" required htmlFor="nombre" error={errors.nombre}
-                  className="sm:col-span-2 lg:col-span-3">
-                  <Input id="nombre" type="text" value={form.nombre} onChange={e => set('nombre', e.target.value)}
-                    placeholder="Nombre del evento MICE" error={!!errors.nombre} disabled={lock} />
-                </FormField>
-                <FormField label="Estado" required htmlFor="estado" error={errors.estado}
-                  className="lg:col-span-1">
-                  <CustomSelect id="estado" value={form.estado}
-                    onChange={v => set('estado', v as SolicitudMiceForm['estado'])}
-                    placeholder="Seleccionar estado..." error={!!errors.estado}
-                    options={catalog.estados.map(s => ({ value: s.nombre, label: s.nombre }))}
-                    disabled={lock || catalogLoading} />
-                </FormField>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:col-span-2 lg:col-span-3">
-                  <FormField label="Fecha inicio" htmlFor="inicio" optional error={errors.inicio}>
-                    <Input
-                      id="inicio"
-                      type="date"
-                      value={form.inicio}
-                      onChange={e => setInicio(e.target.value)}
-                      error={!!errors.inicio}
-                      disabled={lock}
-                      className="scheme-light dark:scheme-dark"
-                    />
-                  </FormField>
-                  <FormField
-                    label="Fecha fin"
-                    htmlFor="fin"
-                    optional
-                    error={errors.fin}
-                    hint={form.inicio ? `Mínimo: ${form.inicio}` : undefined}
-                  >
-                    <Input
-                      id="fin"
-                      type="date"
-                      value={form.fin}
-                      min={form.inicio || undefined}
-                      onChange={e => setFin(e.target.value)}
-                      error={!!errors.fin}
-                      disabled={lock}
-                      className="scheme-light dark:scheme-dark"
-                    />
-                  </FormField>
-                </div>
-                <FormField label="Probabilidad" htmlFor="probabilidad" optional className="lg:col-span-1">
-                  <CustomSelect id="probabilidad" value={form.probabilidad}
-                    onChange={v => set('probabilidad', v as SolicitudMiceForm['probabilidad'])}
-                    placeholder="—"
-                    options={[
-                      { value: '', label: '—' },
-                      ...catalog.probabilidades.map(p => ({ value: p.nombre, label: p.nombre })),
-                    ]}
-                    disabled={lock || catalogLoading} />
-                </FormField>
-                <FormField label="Valor cotizado" htmlFor="valor_cotizado" optional className="sm:col-span-2 lg:col-span-3 lg:col-start-1"
-                  hint="Ej. 1.500.241,01">
-                  <div className="flex gap-2">
-                    <Select
-                      id="moneda_cotizacion"
-                      value={form.moneda_cotizacion}
-                      onChange={e => set('moneda_cotizacion', e.target.value as MonedaCotizacion)}
-                      disabled={lock}
-                      className="w-28 shrink-0"
-                      aria-label="Moneda de cotización"
-                    >
-                      {catalog.monedas.map(m => (
-                        <option key={m.codigo} value={m.codigo}>{m.codigo}</option>
-                      ))}
-                    </Select>
-                    <DecimalInput
-                      id="valor_cotizado"
-                      value={form.valor_cotizado}
-                      onChange={v => set('valor_cotizado', v)}
-                      placeholder="0"
-                      className="min-w-0 flex-1"
-                      disabled={lock}
-                    />
-                  </div>
-                </FormField>
-                <FormField label="Utilidad proyectada" htmlFor="utilidad" optional className="lg:col-span-1"
-                  hint="Ej. 1.500.241,01">
-                  <DecimalInput
-                    id="utilidad"
-                    value={form.utilidad_proyectada}
-                    onChange={v => set('utilidad_proyectada', v)}
-                    placeholder="0"
-                    disabled={lock}
-                  />
-                </FormField>
-              </div>
-          </FormSection>
-
-          <FormSection step={3} title="Detalle del evento" description="Servicios, PAX y ubicación">
+          <FormSection step={2} title="Detalle del evento" description="Servicios, ubicación y destinos">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <FormField
                   label="Servicios"
@@ -601,31 +773,45 @@ export default function SolicitudMiceFormPage({
                     readOnly={lock}
                   />
                 </FormField>
-                <FormField label="PAX" htmlFor="pax" optional error={errors.pax}>
-                  <Input id="pax" type="number" min={0} value={form.pax}
-                    onChange={e => set('pax', e.target.value)} error={!!errors.pax} disabled={lock} />
-                </FormField>
-                <FormField label="Lugar" optional hint="Puede elegir uno o ambos">
-                  <LugarMiceSelect
-                    lugares={catalog.lugares}
-                    value={form.lugares}
-                    onChange={lugares => set('lugares', lugares)}
-                    error={!!errors.lugares}
-                    readOnly={lock}
-                  />
-                </FormField>
-                <FormField label="Tiqueteador asignado" htmlFor="tiqueteador" optional className="sm:col-span-2 lg:col-span-2"
-                  hint="Usuarios registrados en el sistema (tabla profiles)">
-                  <CustomSelect
-                    id="tiqueteador"
-                    value={form.tiqueteador_user_id}
-                    onChange={setTiqueteador}
-                    placeholder="No aplica"
-                    options={tiqueteadorOptions}
-                    searchable
-                    disabled={lock || catalogLoading}
-                  />
-                </FormField>
+                <div className="flex flex-col sm:flex-row sm:flex-wrap lg:flex-nowrap gap-5 items-end sm:col-span-2 lg:col-span-4 w-full min-w-0">
+                  <FormField
+                    label="PAX"
+                    htmlFor="pax"
+                    optional
+                    error={errors.pax}
+                    className="w-full sm:w-28 shrink-0 min-w-0"
+                  >
+                    <Input id="pax" type="number" min={0} value={form.pax}
+                      onChange={e => set('pax', e.target.value)} error={!!errors.pax} disabled={lock} />
+                  </FormField>
+                  <FormField label="Lugar" optional className="w-full sm:w-auto shrink-0 min-w-0">
+                    <LugarMiceSelect
+                      lugares={catalog.lugares}
+                      value={form.lugares}
+                      onChange={lugares => set('lugares', lugares)}
+                      error={!!errors.lugares}
+                      readOnly={lock}
+                    />
+                  </FormField>
+                  <FormField
+                    label="Tiqueteador"
+                    htmlFor="tiqueteador"
+                    required
+                    error={errors.tiqueteador_user_id}
+                    className="w-full sm:flex-1 sm:min-w-[12rem] min-w-0"
+                  >
+                    <CustomSelect
+                      id="tiqueteador"
+                      value={form.tiqueteador_user_id ?? ''}
+                      onChange={setTiqueteador}
+                      placeholder="Seleccionar..."
+                      error={!!errors.tiqueteador_user_id}
+                      options={tiqueteadorOptions}
+                      searchable
+                      disabled={lock || catalogLoading || !!usuariosTiqueteadorError}
+                    />
+                  </FormField>
+                </div>
                 <div className="sm:col-span-2 lg:col-span-4">
                   <FormField
                     label="Destinos"
@@ -641,6 +827,113 @@ export default function SolicitudMiceFormPage({
                     />
                   </FormField>
                 </div>
+              </div>
+          </FormSection>
+
+          <FormSection
+            step={3}
+            title="Cotización"
+            description={
+              isEdit
+                ? 'Valor, utilidad, entrega y probabilidad'
+                : 'Valor, utilidad, entrega y probabilidad (opcional al registrar)'
+            }
+          >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-5 items-end">
+                <FormField
+                  label="Valor cotizado"
+                  htmlFor="valor_cotizado"
+                  required={isEdit}
+                  optional={!isEdit}
+                  error={errors.valor_cotizado}
+                  className="sm:col-span-1 lg:col-span-4 min-w-0"
+                >
+                  <div className="flex gap-2 min-w-0">
+                    <Select
+                      id="moneda_cotizacion"
+                      value={form.moneda_cotizacion}
+                      onChange={e => set('moneda_cotizacion', e.target.value as MonedaCotizacion)}
+                      disabled={lock}
+                      className="w-24 shrink-0"
+                      aria-label="Moneda de cotización"
+                    >
+                      {catalog.monedas.map(m => (
+                        <option key={m.codigo} value={m.codigo}>{m.codigo}</option>
+                      ))}
+                    </Select>
+                    <DecimalInput
+                      id="valor_cotizado"
+                      value={form.valor_cotizado}
+                      onChange={v => set('valor_cotizado', v)}
+                      placeholder="0"
+                      className="min-w-0 flex-1"
+                      error={!!errors.valor_cotizado}
+                      disabled={lock}
+                    />
+                  </div>
+                </FormField>
+                <FormField
+                  label="Utilidad proyectada"
+                  htmlFor="utilidad"
+                  required={isEdit}
+                  optional={!isEdit}
+                  error={errors.utilidad_proyectada}
+                  className="sm:col-span-1 lg:col-span-4 min-w-0"
+                >
+                  <DecimalInput
+                    id="utilidad"
+                    value={form.utilidad_proyectada}
+                    onChange={v => set('utilidad_proyectada', v)}
+                    placeholder="0"
+                    error={!!errors.utilidad_proyectada}
+                    disabled={lock}
+                  />
+                </FormField>
+                <FormField
+                  label="Fecha entrega"
+                  htmlFor="fecha_entrega"
+                  required={isEdit}
+                  optional={!isEdit}
+                  error={errors.fecha_entrega}
+                  className="sm:col-span-1 lg:col-span-2 lg:max-w-44 min-w-0"
+                >
+                  <Input
+                    id="fecha_entrega"
+                    type="date"
+                    value={form.fecha_entrega}
+                    min={form.fecha_solicitud || undefined}
+                    onChange={e => setFechaEntrega(e.target.value)}
+                    error={!!errors.fecha_entrega}
+                    disabled={lock}
+                    className="scheme-light dark:scheme-dark"
+                  />
+                </FormField>
+                <FormField
+                  label="Probabilidad"
+                  htmlFor="probabilidad"
+                  required={isEdit}
+                  optional={!isEdit}
+                  error={errors.probabilidad}
+                  className="sm:col-span-1 lg:col-span-2 lg:max-w-40 min-w-0"
+                >
+                  <CustomSelect
+                    id="probabilidad"
+                    value={form.probabilidad_id != null ? String(form.probabilidad_id) : ''}
+                    onChange={v => {
+                      const id = v ? Number(v) : null
+                      const item = catalog.probabilidades.find(p => p.id === id)
+                      setForm(prev => ({
+                        ...prev,
+                        probabilidad_id: id,
+                        probabilidad: (item?.nombre ?? prev.probabilidad) as SolicitudMiceForm['probabilidad'],
+                      }))
+                    }}
+                    placeholder="Seleccionar..."
+                    error={!!errors.probabilidad}
+                    options={probabilidadOptions}
+                    disabled={lock || catalogLoading}
+                  />
+                </FormField>
               </div>
           </FormSection>
 
@@ -689,8 +982,8 @@ export default function SolicitudMiceFormPage({
                 </Button>
                 <Button
                   type="submit"
-                  loading={isSaving || editLoading}
-                  disabled={catalogLoading || formBusy}
+                  loading={isSaving}
+                  disabled={catalogLoading || formBusy || formHydrating}
                   size="lg"
                 >
                   {isEdit ? 'Guardar cambios' : 'Registrar solicitud MICE'}

@@ -33,18 +33,18 @@ export async function fetchSolicitudRelaciones(
 ): Promise<{ data: SolicitudMiceRelaciones; error: string | null }> {
   const [servRes, destRes, lugRes] = await Promise.all([
     supabase
-      .from('solicitud_mice_servicios')
+      .from('th_solicitud_mice_servicios')
       .select('servicio_id, orden')
       .eq('solicitud_id', solicitudId)
       .order('orden'),
     supabase
-      .from('solicitud_mice_destinos')
-      .select('orden, paises_destino(nombre), ciudades_destino(nombre)')
+      .from('th_solicitud_mice_destinos')
+      .select('orden, td_pais_destino(nombre), td_ciudades_destino(nombre)')
       .eq('solicitud_id', solicitudId)
       .order('orden'),
     supabase
-      .from('solicitud_mice_lugares')
-      .select('lugares_mice(nombre, orden)')
+      .from('th_solicitud_mice_lugares')
+      .select('td_lugares(nombre, orden)')
       .eq('solicitud_id', solicitudId),
   ])
 
@@ -64,11 +64,11 @@ export async function fetchSolicitudRelaciones(
     .sort((a, b) => (a as { orden: number }).orden - (b as { orden: number }).orden)
     .map(row => {
       const r = row as {
-        paises_destino: { nombre: string } | { nombre: string }[] | null
-        ciudades_destino: { nombre: string } | { nombre: string }[] | null
+        td_pais_destino: { nombre: string } | { nombre: string }[] | null
+        td_ciudades_destino: { nombre: string } | { nombre: string }[] | null
       }
-      const paisRow = Array.isArray(r.paises_destino) ? r.paises_destino[0] : r.paises_destino
-      const ciudadRow = Array.isArray(r.ciudades_destino) ? r.ciudades_destino[0] : r.ciudades_destino
+      const paisRow = Array.isArray(r.td_pais_destino) ? r.td_pais_destino[0] : r.td_pais_destino
+      const ciudadRow = Array.isArray(r.td_ciudades_destino) ? r.td_ciudades_destino[0] : r.td_ciudades_destino
       return {
         pais: paisRow?.nombre ?? '',
         ciudad: ciudadRow?.nombre ?? '',
@@ -78,8 +78,8 @@ export async function fetchSolicitudRelaciones(
 
   const lugares = (lugRes.data ?? [])
     .map(row => {
-      const r = row as { lugares_mice: { nombre: string; orden: number } | { nombre: string; orden: number }[] | null }
-      const lugar = Array.isArray(r.lugares_mice) ? r.lugares_mice[0] : r.lugares_mice
+      const r = row as { td_lugares: { nombre: string; orden: number } | { nombre: string; orden: number }[] | null }
+      const lugar = Array.isArray(r.td_lugares) ? r.td_lugares[0] : r.td_lugares
       return lugar ? { nombre: lugar.nombre, orden: lugar.orden } : null
     })
     .filter((x): x is { nombre: string; orden: number } => x != null)
@@ -91,9 +91,9 @@ export async function fetchSolicitudRelaciones(
 
 async function deleteRelaciones(solicitudId: string): Promise<string | null> {
   const tables = [
-    'solicitud_mice_servicios',
-    'solicitud_mice_destinos',
-    'solicitud_mice_lugares',
+    'th_solicitud_mice_servicios',
+    'th_solicitud_mice_destinos',
+    'th_solicitud_mice_lugares',
   ] as const
 
   for (const table of tables) {
@@ -117,7 +117,7 @@ export async function syncSolicitudRelaciones(
       servicio_id,
       orden,
     }))
-    const { error } = await supabase.from('solicitud_mice_servicios').insert(rows)
+    const { error } = await supabase.from('th_solicitud_mice_servicios').insert(rows)
     if (error) return { error: error.message }
   }
 
@@ -132,7 +132,7 @@ export async function syncSolicitudRelaciones(
     destinoRows.push({ solicitud_id: solicitudId, ...ids, orden: i })
   }
   if (destinoRows.length > 0) {
-    const { error } = await supabase.from('solicitud_mice_destinos').insert(destinoRows)
+    const { error } = await supabase.from('th_solicitud_mice_destinos').insert(destinoRows)
     if (error) return { error: error.message }
   }
 
@@ -150,7 +150,7 @@ export async function syncSolicitudRelaciones(
       .filter((r): r is { solicitud_id: string; lugar_id: number } => r != null)
 
     if (rows.length > 0) {
-      const { error } = await supabase.from('solicitud_mice_lugares').insert(rows)
+      const { error } = await supabase.from('th_solicitud_mice_lugares').insert(rows)
       if (error) return { error: error.message }
     }
   }
@@ -158,8 +158,7 @@ export async function syncSolicitudRelaciones(
   return { error: null }
 }
 
-/** Columnas texto legacy en solicitudes_mice (vista y compatibilidad Excel) */
-export function relacionesToLegacyColumns(
+function legacyTextFromForm(
   form: SolicitudMiceForm,
   catalog: MiceCatalogos
 ): Record<string, unknown> {
@@ -171,4 +170,17 @@ export function relacionesToLegacyColumns(
     ),
     ...destinosToDbColumns(form.destinos),
   }
+}
+
+/** Copia servicios/lugar/destinos a columnas texto solo para listado/Excel (fuente: tablas hijas) */
+export async function snapshotLegacyTextFromForm(
+  solicitudId: string,
+  form: SolicitudMiceForm,
+  catalog: MiceCatalogos
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('th_solicitud_mice')
+    .update(legacyTextFromForm(form, catalog))
+    .eq('id', solicitudId)
+  return { error: error?.message ?? null }
 }

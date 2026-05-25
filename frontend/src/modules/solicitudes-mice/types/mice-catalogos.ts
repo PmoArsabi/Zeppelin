@@ -23,11 +23,29 @@ export interface LugarMiceCatalogo {
   orden: number
 }
 
+export interface SectorMiceCatalogo {
+  id: number
+  nombre: string
+}
+
+export interface EstadoMiceCatalogo {
+  id: number
+  codigo: string
+  nombre: string
+}
+
+export interface ProbabilidadMiceCatalogo {
+  id: number
+  codigo: string
+  nombre: string
+}
+
 export interface MiceCatalogos {
   anios: number[]
   monedas: { codigo: string; nombre: string }[]
-  estados: { codigo: string; nombre: string }[]
-  probabilidades: { codigo: string; nombre: string }[]
+  estados: EstadoMiceCatalogo[]
+  probabilidades: ProbabilidadMiceCatalogo[]
+  sectores: SectorMiceCatalogo[]
   lugares: LugarMiceCatalogo[]
   servicios: ServicioMiceCatalogo[]
   paises: PaisDestinoCatalogo[]
@@ -38,6 +56,18 @@ export interface MiceCatalogos {
   ciudadIdByPaisYNombre: Map<string, number>
   /** nombre lugar → id */
   lugarIdByNombre: Map<string, number>
+  /** nombre estado normalizado (lower) → id */
+  estadoIdByNombre: Map<string, number>
+  /** id → nombre estado */
+  estadoNombreById: Map<number, string>
+  /** codigo → id (legacy / búsqueda) */
+  estadoIdByCodigo: Map<string, number>
+  probabilidadIdByNombre: Map<string, number>
+  probabilidadNombreById: Map<number, string>
+  probabilidadIdByCodigo: Map<string, number>
+  /** nombre sector formateado (lower) → id */
+  sectorIdByNombre: Map<string, number>
+  sectorNombreById: Map<number, string>
 }
 
 export const MICE_CATALOGOS_VACIOS: MiceCatalogos = {
@@ -45,6 +75,7 @@ export const MICE_CATALOGOS_VACIOS: MiceCatalogos = {
   monedas: [],
   estados: [],
   probabilidades: [],
+  sectores: [],
   lugares: [],
   servicios: [],
   paises: [],
@@ -52,4 +83,12 @@ export const MICE_CATALOGOS_VACIOS: MiceCatalogos = {
   paisIdByNombre: new Map(),
   ciudadIdByPaisYNombre: new Map(),
   lugarIdByNombre: new Map(),
+  estadoIdByNombre: new Map(),
+  estadoNombreById: new Map(),
+  estadoIdByCodigo: new Map(),
+  probabilidadIdByNombre: new Map(),
+  probabilidadNombreById: new Map(),
+  probabilidadIdByCodigo: new Map(),
+  sectorIdByNombre: new Map(),
+  sectorNombreById: new Map(),
 }

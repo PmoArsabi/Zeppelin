@@ -1,10 +1,42 @@
 @import "tailwindcss";
+@import "@fontsource-variable/montserrat/index.css";
 
 /* Activar dark mode basado en clase .dark en <html> */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+  Manual de marca Viajes Zeppelin
+  - Azul principal: #244B74
+  - Naranja principal: #E67A2E
+*/
 @theme {
-  --font-sans: 'Inter', system-ui, 'Segoe UI', sans-serif;
+  --font-sans: 'Montserrat Variable', 'Montserrat', system-ui, 'Segoe UI', sans-serif;
+
+  /* Azul corporativo → utilidades indigo-* (navegación, enlaces, foco) */
+  --color-indigo-50: #eef4f9;
+  --color-indigo-100: #dce9f3;
+  --color-indigo-200: #b9d3e7;
+  --color-indigo-300: #8fb5d4;
+  --color-indigo-400: #5a8db8;
+  --color-indigo-500: #3d6a94;
+  --color-indigo-600: #244b74;
+  --color-indigo-700: #1c3c5c;
+  --color-indigo-800: #152d45;
+  --color-indigo-900: #0e1e2e;
+  --color-indigo-950: #081420;
+
+  /* Naranja corporativo → utilidades orange-* (CTA, acentos) */
+  --color-orange-50: #fdf5ef;
+  --color-orange-100: #fbe8d9;
+  --color-orange-200: #f6d0b3;
+  --color-orange-300: #f0b88d;
+  --color-orange-400: #eb9f67;
+  --color-orange-500: #e67a2e;
+  --color-orange-600: #cf6e29;
+  --color-orange-700: #a85821;
+  --color-orange-800: #814219;
+  --color-orange-900: #5a2d11;
+  --color-orange-950: #3d1d0b;
 }
 
 *, *::before, *::after {
@@ -20,7 +52,7 @@ html {
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
 }
 
 #root {
@@ -32,7 +64,66 @@ body {
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: #b9d3e7; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #8fb5d4; }
 .dark ::-webkit-scrollbar-thumb { background: #374151; }
 .dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+/* Login — degradado marca (#244B74 azul, #E67A2E naranja) */
+.login-page {
+  background-color: #244b74;
+  background-image:
+    radial-gradient(ellipse 85% 65% at 100% 0%, rgba(230, 122, 46, 0.5), transparent 52%),
+    radial-gradient(ellipse 70% 55% at 0% 100%, rgba(230, 122, 46, 0.32), transparent 48%),
+    linear-gradient(145deg, #244b74 0%, #1c3c5c 32%, #3d6a94 58%, #cf6e29 88%, #e67a2e 100%);
+}
+
+.dark .login-page {
+  background-color: #0e1e2e;
+  background-image:
+    radial-gradient(ellipse 80% 55% at 92% 8%, rgba(230, 122, 46, 0.26), transparent 50%),
+    radial-gradient(ellipse 65% 50% at 8% 92%, rgba(230, 122, 46, 0.16), transparent 46%),
+    linear-gradient(155deg, #081420 0%, #152d45 40%, #244b74 68%, #3d1d0b 100%);
+}
+
+.login-page::before,
+.login-page::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(72px);
+}
+
+.login-page::before {
+  width: min(50vw, 380px);
+  height: min(50vw, 380px);
+  top: -12%;
+  right: -6%;
+  background: rgba(230, 122, 46, 0.35);
+}
+
+.login-page::after {
+  width: min(42vw, 320px);
+  height: min(42vw, 320px);
+  bottom: -14%;
+  left: -8%;
+  background: rgba(36, 75, 116, 0.45);
+}
+
+.dark .login-page::before {
+  background: rgba(230, 122, 46, 0.2);
+}
+
+.dark .login-page::after {
+  background: rgba(36, 75, 116, 0.55);
+}
+
+.login-page__footer {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.dark .login-page__footer {
+  color: rgba(255, 255, 255, 0.62);
+}

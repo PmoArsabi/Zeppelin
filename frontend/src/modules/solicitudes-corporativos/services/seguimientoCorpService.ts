@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import type { SeguimientoCorpEntry } from '../types/seguimiento-corp'
 
-const TABLE = 'solicitud_seguimientos'
+const TABLE = 'th_solicitud_seguimientos'
 
 export function formatSeguimientoCorpError(message: string): string {
   const m = message.toLowerCase()

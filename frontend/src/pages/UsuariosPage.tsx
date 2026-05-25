@@ -3,11 +3,13 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import AppShell from '../components/layout/AppShell'
 import Button from '../components/ui/Button'
+import PageTitle from '../components/ui/PageTitle'
 import Alert from '../components/ui/Alert'
 import FormField from '../components/ui/FormField'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import type { NavigateFn } from '@/modules'
+import { formatDateDDMMYYYY } from '@/lib/formatDate'
 
 interface UserRow {
   id: string
@@ -92,7 +94,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-700 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-gray-800">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">Nuevo usuario</h2>
+          <PageTitle as="h2" size="modal">Nuevo usuario</PageTitle>
           <button onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -199,7 +201,7 @@ function EditModal({ user, onClose, onSaved }: {
       <div className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-700 shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-gray-800">
           <div>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Editar usuario</h2>
+            <PageTitle as="h2" size="modal">Editar usuario</PageTitle>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
           </div>
           <button onClick={onClose}
@@ -330,7 +332,6 @@ export default function UsuariosPage({ onNavigate }: Props) {
     }
   }
 
-  const fmtDate = (ts: string) => new Date(ts).toLocaleDateString('es-CO', { dateStyle: 'medium' })
 
   return (
     <AppShell activeModule="usuarios" onNavigate={onNavigate}>
@@ -354,7 +355,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-start justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Usuarios</h1>
+            <PageTitle>Usuarios</PageTitle>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               {loading ? 'Cargando...' : `${users.length} usuario${users.length !== 1 ? 's' : ''} registrado${users.length !== 1 ? 's' : ''}`}
             </p>
@@ -409,7 +410,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
                       <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400">{u.email}</td>
                       <td className="px-4 py-3.5">{roleBadge(u.role)}</td>
                       <td className="px-4 py-3.5">{statusBadge(u.disabled)}</td>
-                      <td className="px-4 py-3.5 text-slate-400 dark:text-slate-500 text-xs whitespace-nowrap">{fmtDate(u.created_at)}</td>
+                      <td className="px-4 py-3.5 text-slate-400 dark:text-slate-500 text-xs whitespace-nowrap">{formatDateDDMMYYYY(u.created_at)}</td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1.5">
                           {/* Editar */}
@@ -475,7 +476,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
                   </div>
                   <div className="flex items-center gap-2 mt-1 mb-3 pl-12">
                     {statusBadge(u.disabled)}
-                    <span className="text-xs text-slate-400 dark:text-slate-500">· Desde {fmtDate(u.created_at)}</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">· Desde {formatDateDDMMYYYY(u.created_at)}</span>
                   </div>
                   <div className="flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-gray-800">
                     <button

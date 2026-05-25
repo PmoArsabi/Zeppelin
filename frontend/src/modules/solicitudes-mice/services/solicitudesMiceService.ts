@@ -1,32 +1,61 @@
 import { supabase } from '@/lib/supabase'
 import { formatDecimalCO, parseDecimalCO } from '@/lib/decimalFormat'
 import { mzpFromSuffix, mzpSuffix } from '@/lib/mzpFormat'
-import { destinosToDbColumns, dbColumnsToDestinos } from '../lib/destinosMice'
-import { lugaresToDb, dbToLugares } from '../lib/lugaresMice'
-import { serviciosToDb, dbToServicios } from '../lib/serviciosMice'
 import {
   ANIO_MICE_DEFAULT,
   type SolicitudMiceForm,
   type SolicitudMiceRow,
+  type SolicitudMiceRowDb,
 } from '../types'
 import type { MiceCatalogos } from '../types/mice-catalogos'
+import { MICE_CATALOGOS_VACIOS } from '../types/mice-catalogos'
+import { enrichMiceRowDisplay } from '../lib/enrichMiceRow'
 import {
   fetchSolicitudRelaciones,
-  relacionesToLegacyColumns,
   syncSolicitudRelaciones,
   type SolicitudMiceRelaciones,
 } from './miceRelacionesService'
 import { addSeguimientoMice } from './seguimientoMiceService'
 import { buildAuditoriaMiceObservacion } from '@/lib/auditoria/camposMice'
 import { registrarAuditoriaEdicion } from '@/lib/auditoria/logAuditoriaService'
+import { fetchMiceCatalogos } from './miceCatalogosService'
+import { resolveNextMzpCode } from './mzpConsecutivoService'
+import { buildClienteNombreById, fetchClientesZeppelinCatalog } from '@/lib/clientes'
+import { formatSectorNombre } from '../lib/formatSectorMice'
+import {
+  pickEstadoIdForSave,
+  pickProbabilidadIdForSave,
+  resolveEstadoIdFromLegacy,
+  resolveProbabilidadIdFromLegacy,
+  resolveEstadoNombre,
+  resolveProbabilidadNombre,
+  resolveSectorId,
+} from '../lib/miceCatalogResolve'
 
-const TABLE = 'solicitudes_mice'
+export { formatSectorNombre }
 
-/** Primera letra mayúscula, resto minúsculas (ej. TELEVISION → Television) */
-export function formatSectorNombre(nombre: string): string {
-  const t = nombre.trim()
-  if (!t) return ''
-  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
+const TABLE = 'th_solicitud_mice'
+
+export type TiqueteadorOption = { value: string; label: string }
+
+/** Perfil NA en td_profiles (valor por defecto del tiqueteador). */
+export function isTiqueteadorNaLabel(label: string): boolean {
+  const n = label.trim().toLowerCase().replace(/\s+/g, '')
+  return n === 'na' || n === 'n/a' || n === 'noaplica'
+}
+
+export function sortTiqueteadorOptions(list: TiqueteadorOption[]): TiqueteadorOption[] {
+  return [...list].sort((a, b) => {
+    const aNa = isTiqueteadorNaLabel(a.label)
+    const bNa = isTiqueteadorNaLabel(b.label)
+    if (aNa && !bNa) return -1
+    if (!aNa && bNa) return 1
+    return a.label.localeCompare(b.label, 'es')
+  })
+}
+
+export function findTiqueteadorNaOption(list: TiqueteadorOption[]): TiqueteadorOption | undefined {
+  return list.find(u => isTiqueteadorNaLabel(u.label))
 }
 
 function parseNum(value: string): number | null {
@@ -46,17 +75,26 @@ export function toDateInputValue(value: string | null | undefined): string {
   return ''
 }
 
+/**
+ * Solo columnas ID/código + datos de negocio.
+ * Solo FKs y datos de negocio; relaciones N:M en tablas hijas.
+ */
 export function formToPayload(
   form: SolicitudMiceForm,
-  userId: string
+  userId: string,
+  catalog: MiceCatalogos
 ): Record<string, unknown> {
+  const estadoId = pickEstadoIdForSave(form.estado_id, form.estado, catalog)
+  const probabilidadId = pickProbabilidadIdForSave(form.probabilidad_id, form.probabilidad, catalog)
+  const sectorId =
+    form.sector_id ?? (form.sector.trim() ? resolveSectorId(form.sector, catalog) : null)
+
   return {
     user_id: userId,
-    responsable_id: userId,
-    responsable_nombre: form.responsable_nombre.trim(),
+    responsable_id: form.responsable_id.trim() || userId,
     anio: form.anio,
-    cliente: form.cliente.trim(),
-    sector: form.sector.trim() ? formatSectorNombre(form.sector) : null,
+    cliente_id: form.cliente_id,
+    sector_id: sectorId,
     mzp: (() => {
       const code = mzpFromSuffix(mzpSuffix(form.mzp))
       return code || null
@@ -64,58 +102,97 @@ export function formToPayload(
     nombre: form.nombre.trim(),
     inicio: emptyToNull(form.inicio),
     fin: emptyToNull(form.fin),
-    estado: form.estado,
-    valor_cotizado: parseNum(form.valor_cotizado),
+    estado_id: estadoId,
+    probabilidad_id: probabilidadId,
     moneda_cotizacion: form.moneda_cotizacion,
+    tiqueteador_user_id: form.tiqueteador_user_id.trim() || null,
+    valor_cotizado: parseNum(form.valor_cotizado),
     utilidad_proyectada: parseNum(form.utilidad_proyectada),
     fecha_solicitud: form.fecha_solicitud,
     fecha_entrega: emptyToNull(form.fecha_entrega),
-    servicios: serviciosToDb(form.servicios),
     pax: form.pax.trim() ? parseInt(form.pax, 10) : null,
-    lugar: lugaresToDb(form.lugares),
-    ...destinosToDbColumns(form.destinos),
-    tiqueteador_user_id: form.tiqueteador_user_id.trim() || null,
-    tiqueteador_asignado: emptyToNull(form.tiqueteador_asignado),
-    probabilidad: form.probabilidad || null,
   }
 }
 
 export function rowToForm(
-  row: SolicitudMiceRow,
+  row: SolicitudMiceRow | SolicitudMiceRowDb,
   catalog?: MiceCatalogos,
-  relaciones?: SolicitudMiceRelaciones | null
+  relaciones?: SolicitudMiceRelaciones | null,
+  clienteNombreById?: Map<number, string>,
+  profileNombreById?: Map<string, string>
 ): SolicitudMiceForm {
-  const anios = catalog?.anios ?? []
+  const cat = catalog ?? MICE_CATALOGOS_VACIOS
+  const anios = cat.anios
   const anioDefault = anios[0] ?? ANIO_MICE_DEFAULT
-  const lugarNombres = catalog?.lugares.map(l => l.nombre)
-
-  const serviciosTexto = dbToServicios(row.servicios, catalog?.servicios)
-  const destinosTexto = dbColumnsToDestinos(row.pais_destino, row.ciudad_destino)
-  const lugaresTexto = dbToLugares(row.lugar, lugarNombres)
+  const legacy = row as SolicitudMiceRowDb & {
+    estado_codigo?: string | null
+    estado?: string | null
+    probabilidad_codigo?: string | null
+    probabilidad?: string | null
+  }
+  const estadoId = resolveEstadoIdFromLegacy(
+    row.estado_id,
+    legacy.estado_codigo,
+    legacy.estado,
+    cat
+  )
+  const probabilidadId = resolveProbabilidadIdFromLegacy(
+    row.probabilidad_id,
+    legacy.probabilidad_codigo,
+    legacy.probabilidad,
+    cat
+  )
+  const rowDb: SolicitudMiceRowDb = { ...row, estado_id: estadoId, probabilidad_id: probabilidadId }
+  const enriched =
+    'responsable_nombre' in row
+      ? {
+          ...row,
+          estado_id: estadoId,
+          estado: resolveEstadoNombre(estadoId, cat, row.estado),
+          probabilidad_id: probabilidadId,
+          probabilidad: resolveProbabilidadNombre(probabilidadId, cat, row.probabilidad),
+        }
+      : enrichMiceRowDisplay(rowDb, cat, { clienteNombreById, profileNombreById })
 
   return {
-    anio: anios.includes(row.anio) ? row.anio : anioDefault,
-    responsable_nombre: row.responsable_nombre,
-    cliente: row.cliente,
-    sector: row.sector ? formatSectorNombre(row.sector) : '',
-    mzp: row.mzp ?? '',
-    nombre: row.nombre,
-    inicio: toDateInputValue(row.inicio),
-    fin: toDateInputValue(row.fin),
-    estado: row.estado,
-    valor_cotizado: row.valor_cotizado != null ? formatDecimalCO(row.valor_cotizado) : '',
-    moneda_cotizacion: row.moneda_cotizacion ?? 'COP',
-    utilidad_proyectada: row.utilidad_proyectada != null ? formatDecimalCO(row.utilidad_proyectada) : '',
-    fecha_solicitud: row.fecha_solicitud,
-    fecha_entrega: row.fecha_entrega ?? '',
-    servicios: relaciones?.servicios.length ? relaciones.servicios : serviciosTexto,
-    pax: row.pax != null ? String(row.pax) : '',
-    lugares: relaciones?.lugares.length ? relaciones.lugares : lugaresTexto,
-    destinos: relaciones?.destinos.length ? relaciones.destinos : destinosTexto,
-    tiqueteador_user_id: row.tiqueteador_user_id ?? '',
-    tiqueteador_asignado: row.tiqueteador_asignado ?? '',
-    probabilidad: row.probabilidad ?? '',
+    anio: anios.includes(enriched.anio) ? enriched.anio : anioDefault,
+    responsable_id: enriched.responsable_id ?? '',
+    responsable_nombre: enriched.responsable_nombre,
+    cliente_id: enriched.cliente_id ?? null,
+    cliente: enriched.cliente,
+    sector_id: enriched.sector_id ?? null,
+    sector: enriched.sector ?? '',
+    mzp: enriched.mzp ?? '',
+    nombre: enriched.nombre,
+    inicio: toDateInputValue(enriched.inicio),
+    fin: toDateInputValue(enriched.fin),
+    estado_id: enriched.estado_id ?? null,
+    estado: enriched.estado,
+    valor_cotizado: enriched.valor_cotizado != null ? formatDecimalCO(enriched.valor_cotizado) : '',
+    moneda_cotizacion: enriched.moneda_cotizacion ?? 'COP',
+    utilidad_proyectada:
+      enriched.utilidad_proyectada != null ? formatDecimalCO(enriched.utilidad_proyectada) : '',
+    fecha_solicitud: enriched.fecha_solicitud,
+    fecha_entrega: enriched.fecha_entrega ?? '',
+    servicios: relaciones?.servicios ?? [],
+    pax: enriched.pax != null ? String(enriched.pax) : '',
+    lugares: relaciones?.lugares ?? [],
+    destinos: relaciones?.destinos ?? [],
+    tiqueteador_user_id: enriched.tiqueteador_user_id ?? '',
+    tiqueteador_asignado: enriched.tiqueteador_asignado ?? '',
+    probabilidad_id: enriched.probabilidad_id ?? null,
+    probabilidad: enriched.probabilidad ?? '',
   }
+}
+
+async function fetchProfileNombreById(): Promise<Map<string, string>> {
+  const { data } = await supabase.from('td_profiles').select('id, display_name')
+  const map = new Map<string, string>()
+  for (const row of data ?? []) {
+    const r = row as { id: string; display_name: string | null }
+    if (r.display_name?.trim()) map.set(r.id, r.display_name.trim())
+  }
+  return map
 }
 
 export async function listSolicitudesMice(
@@ -132,18 +209,31 @@ export async function listSolicitudesMice(
 
   const { data, error } = await query
   if (error) return { data: null, error: error.message }
-  return { data: data as SolicitudMiceRow[], error: null }
+
+  const [{ data: catalogData }, { data: clientesCatalog }, profileNombreById] = await Promise.all([
+    fetchMiceCatalogos(),
+    fetchClientesZeppelinCatalog(),
+    fetchProfileNombreById(),
+  ])
+  const clienteNombreById = buildClienteNombreById(clientesCatalog)
+  const rows = (data as SolicitudMiceRowDb[]).map(r =>
+    enrichMiceRowDisplay(r, catalogData, { clienteNombreById, profileNombreById })
+  )
+
+  return { data: rows, error: null }
 }
 
 export async function loadSolicitudForEdit(
-  row: SolicitudMiceRow,
-  catalog: MiceCatalogos
+  row: SolicitudMiceRow | SolicitudMiceRowDb,
+  catalog: MiceCatalogos,
+  clienteNombreById?: Map<number, string>,
+  profileNombreById?: Map<string, string>
 ): Promise<{ form: SolicitudMiceForm; error: string | null }> {
   const { data: rel, error } = await fetchSolicitudRelaciones(row.id)
   if (error) {
-    return { form: rowToForm(row, catalog), error }
+    return { form: rowToForm(row, catalog, undefined, clienteNombreById, profileNombreById), error }
   }
-  return { form: rowToForm(row, catalog, rel), error: null }
+  return { form: rowToForm(row, catalog, rel, clienteNombreById, profileNombreById), error: null }
 }
 
 export async function saveSolicitudMice(
@@ -154,10 +244,36 @@ export async function saveSolicitudMice(
   primerSeguimiento?: string,
   formAntesEdicion?: SolicitudMiceForm | null
 ): Promise<{ error: string | null; id?: string; auditWarning?: string | null }> {
-  const payload = {
-    ...formToPayload(form, userId),
-    ...relacionesToLegacyColumns(form, catalog),
+  let formForSave = form
+  if (!editId) {
+    const next = await resolveNextMzpCode()
+    if (next.error && !next.code) return { error: next.error }
+    if (next.code) formForSave = { ...form, mzp: next.code }
   }
+
+  const estadoIdSave = pickEstadoIdForSave(formForSave.estado_id, formForSave.estado, catalog)
+  if ((formForSave.estado_id != null || formForSave.estado.trim()) && estadoIdSave == null) {
+    return { error: 'El estado seleccionado no existe en el catálogo. Recargue la página o contacte al administrador.' }
+  }
+  const sectorIdSave =
+    formForSave.sector_id ??
+    (formForSave.sector.trim() ? resolveSectorId(formForSave.sector, catalog) : null)
+  if (formForSave.sector.trim() && sectorIdSave == null) {
+    return { error: 'El sector seleccionado no existe en el catálogo.' }
+  }
+  const probIdSave = pickProbabilidadIdForSave(
+    formForSave.probabilidad_id,
+    formForSave.probabilidad,
+    catalog
+  )
+  if ((formForSave.probabilidad_id != null || formForSave.probabilidad.trim()) && probIdSave == null) {
+    return { error: 'La probabilidad seleccionada no es válida en el catálogo.' }
+  }
+  if (formForSave.cliente_id == null) {
+    return { error: 'Seleccione un cliente.' }
+  }
+
+  const payload = formToPayload(formForSave, userId, catalog)
 
   if (editId) {
     const { error } = await supabase.from(TABLE).update(payload).eq('id', editId)
@@ -207,24 +323,26 @@ export async function fetchUsuariosTiqueteador(): Promise<{
   error: string | null
 }> {
   const { data, error } = await supabase
-    .from('profiles')
+    .from('td_profiles')
     .select('id, display_name')
     .order('display_name')
 
   if (error) return { data: [], error: error.message }
 
-  const list = (data ?? [])
-    .filter((row): row is { id: string; display_name: string } => Boolean(row.display_name?.trim()))
-    .map(row => ({
-      value: row.id,
-      label: row.display_name.trim(),
-    }))
+  const list = sortTiqueteadorOptions(
+    (data ?? [])
+      .filter((row): row is { id: string; display_name: string } => Boolean(row.display_name?.trim()))
+      .map(row => ({
+        value: row.id,
+        label: row.display_name.trim(),
+      }))
+  )
 
   return { data: list, error: null }
 }
 
 export async function fetchSectoresMice(): Promise<string[]> {
-  const { data } = await supabase.from('sectores_mice').select('nombre').order('nombre')
+  const { data } = await supabase.from('td_sectores').select('nombre').order('nombre')
   const seen = new Set<string>()
   const list: string[] = []
   for (const row of data ?? []) {

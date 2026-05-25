@@ -125,7 +125,7 @@ export default function DestinosMiceEditor({ catalog, value, onChange, readOnly 
         </div>
       </div>
 
-      {value.length > 0 ? (
+      {value.length > 0 && (
         <ul className="flex flex-wrap gap-2">
           {value.map((d, i) => (
             <li
@@ -153,10 +153,6 @@ export default function DestinosMiceEditor({ catalog, value, onChange, readOnly 
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Puede agregar varios destinos (ej. Panamá — Ciudad de Panamá; República Dominicana — Punta Cana).
-        </p>
       )}
     </div>
   )

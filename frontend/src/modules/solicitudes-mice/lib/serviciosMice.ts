@@ -40,7 +40,7 @@ export function formatServiciosResumen(
 ): string {
   if (servicios.length === 0) return ''
   return servicios
-    .map(id => catalogo?.find(s => s.id === id)?.shortLabel ?? id)
+    .map(id => catalogo?.find(s => s.id === id)?.label ?? id)
     .join(' + ')
 }
 

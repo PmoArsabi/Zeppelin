@@ -25,7 +25,7 @@ export default function ServiciosMiceSelect({ catalogo, value, onChange, error, 
     () =>
       disponibles.map(s => ({
         value: s.id,
-        label: `${s.id} — ${s.label}`,
+        label: s.label,
       })),
     [disponibles]
   )
@@ -67,9 +67,6 @@ export default function ServiciosMiceSelect({ catalogo, value, onChange, error, 
                                bg-slate-100 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200
                                border border-slate-200 dark:border-slate-700"
                   >
-                    <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 mr-1.5">
-                      {srv.id}
-                    </span>
                     {srv.label}
                   </li>
                 )
@@ -127,7 +124,7 @@ export default function ServiciosMiceSelect({ catalogo, value, onChange, error, 
         </div>
       </div>
 
-      {value.length > 0 ? (
+      {value.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
             {formatServiciosResumen(value, catalogo)}
@@ -143,12 +140,7 @@ export default function ServiciosMiceSelect({ catalogo, value, onChange, error, 
                              bg-slate-100 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200
                              border border-slate-200 dark:border-slate-700"
                 >
-                  <span>
-                    <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 mr-1.5">
-                      {srv.id}
-                    </span>
-                    {srv.label}
-                  </span>
+                  <span>{srv.label}</span>
                   <button
                     type="button"
                     onClick={() => removeServicio(id)}
@@ -165,10 +157,6 @@ export default function ServiciosMiceSelect({ catalogo, value, onChange, error, 
             })}
           </ul>
         </div>
-      ) : (
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Agregue servicios uno a uno (ej. Tiquetes + Alojamiento + Traslados).
-        </p>
       )}
     </div>
   )

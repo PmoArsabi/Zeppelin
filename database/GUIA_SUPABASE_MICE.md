@@ -14,8 +14,14 @@ Ejecuta **un archivo completo cada vez**, en este orden:
 | 2 | `migrations/002_solicitudes_mice_moneda.sql` | Columna `moneda_cotizacion` (si 001 no la tenía) |
 | 3 | `migrations/003_mice_catalogos_y_relaciones.sql` | **Catálogos + tablas N:M + vista + RLS** |
 | 4 | `migrations/004_tiqueteador_desde_usuarios.sql` | Solo si corriste 003 con `tiqueteadores_mice` |
+| 5–8 | `005` … `008` | Seguimiento MICE, auditoría, corp (según módulo) |
+| **9** | **`migrations/009_nomenclatura_td_th_itd.sql`** | **Renombra tablas a `td_` / `th_` / `itd_` (obligatorio para la app actual)** |
+| 10 | `010_rename_th_solicitud_corporativos.sql` | Corrección nombre cabecera corp (si aplica) |
+| 11 | `011_mzp_consecutivo_config.sql` | Consecutivo MZP automático (`td_config`) |
+| 12 | `012_rename_itd_profiles_to_td_profiles.sql` | Perfiles: `itd_profiles` → `td_profiles` (si aplica) |
+| **13** | **`migrations/013_mice_fk_catalogos.sql`** | **FK `estado_codigo`, `probabilidad_codigo`, `sector_id` + trigger de sincronía** |
 
-> Si la base está vacía, el paso 3 también crea `solicitudes_mice` si no existe.
+> Ver mapeo completo en `GUIA_RENOMBRADO_TABLAS.md`. Si la base está vacía, el paso 3 también crea `solicitudes_mice` si no existe (009 la renombra a `th_solicitud_mice`).
 
 ---
 
@@ -108,7 +114,19 @@ order by display_name;
 
 ---
 
-## Columnas legacy en `solicitudes_mice`
+## Fuente de verdad en cabecera (después de 013)
+
+| Campo guardado (FK) | Catálogo | Columna texto (solo lectura / trigger) |
+|--------------------|----------|----------------------------------------|
+| `estado_codigo` | `td_estados` | `estado` |
+| `probabilidad_codigo` | `td_probabilidades` | `probabilidad` |
+| `sector_id` | `td_sectores` | `sector` |
+| `moneda_cotizacion` | `td_monedas` | — (el código es el PK) |
+| `responsable_id` / `tiqueteador_user_id` | `td_profiles` | `responsable_nombre` / `tiqueteador_asignado` |
+
+El trigger `sync_th_solicitud_mice_catalogos` rellena las columnas texto al insertar/actualizar.
+
+## Columnas legacy en `th_solicitud_mice`
 
 El frontend **todavía** escribe texto en:
 
@@ -116,7 +134,7 @@ El frontend **todavía** escribe texto en:
 - `lugar` → `Nacional | Internacional`
 - `pais_destino` / `ciudad_destino` → separados por ` | `
 
-Puedes seguir usándolas mientras migras el frontend a las tablas N:M. La vista `v_solicitudes_mice_resumen` muestra el resumen desde relaciones si existen; si no, usa el texto legacy.
+La fuente de verdad para esos campos son `th_solicitud_mice_servicios`, `_destinos` y `_lugares`. La vista `v_solicitudes_mice_resumen` prioriza las tablas N:M.
 
 ---
 

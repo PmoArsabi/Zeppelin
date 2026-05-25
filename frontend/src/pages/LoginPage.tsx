@@ -5,6 +5,8 @@ import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
 import Alert from '../components/ui/Alert'
 import FormField from '../components/ui/FormField'
+import PageTitle from '../components/ui/PageTitle'
+import { BrandLogo } from '../components/brand/BrandMark'
 
 type Mode = 'login' | 'recovery'
 
@@ -50,14 +52,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#111827] px-4 py-12 transition-colors duration-300">
+    <div className="login-page relative min-h-screen flex items-center justify-center px-4 py-12 transition-colors duration-300 overflow-hidden">
 
       {/* Theme toggle */}
       <button
         onClick={toggle}
         title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-        className="fixed top-4 right-4 w-9 h-9 flex items-center justify-center rounded-xl
-                   bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700
+        className="fixed top-4 right-4 z-20 w-9 h-9 flex items-center justify-center rounded-xl
+                   bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm border border-slate-200 dark:border-gray-700
                    text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white
                    shadow-sm transition-colors"
       >
@@ -74,25 +76,24 @@ export default function LoginPage() {
         )}
       </button>
 
-      <div className="w-full max-w-md">
-        {/* Brand */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-600/25 mb-5">
-            <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            {mode === 'login' ? 'Bienvenido' : 'Recuperar contraseña'}
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm">
-            {mode === 'login' ? 'Ingresa con tu cuenta.' : 'Te enviaremos un enlace de recuperación.'}
-          </p>
-        </div>
-
+      <div className="relative z-10 w-full max-w-md">
         {/* Card */}
-        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-slate-200 dark:border-gray-800
-                        shadow-xl shadow-slate-200/50 dark:shadow-black/30 p-8">
+        <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-3xl border border-slate-200/80 dark:border-gray-800
+                        shadow-xl shadow-slate-300/40 dark:shadow-black/40 p-8">
+
+          <div className="flex flex-col items-center justify-center gap-3 mb-7 text-center">
+            <BrandLogo size="md" className="shrink-0" />
+            <div className="min-w-0">
+              <PageTitle className="text-center">
+                {mode === 'login' ? 'Bienvenido' : 'Recuperar contraseña'}
+              </PageTitle>
+              {mode === 'recovery' && (
+                <p className="text-slate-500 dark:text-slate-400 mt-1.5 text-sm">
+                  Te enviaremos un enlace de recuperación.
+                </p>
+              )}
+            </div>
+          </div>
 
           {mode === 'recovery' && (
             <button
@@ -156,8 +157,9 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p className="text-center mt-6 text-xs text-slate-400 dark:text-gray-600">
-          Zeppelin © {new Date().getFullYear()}
+        <p className="login-page__footer text-center mt-6 text-xs flex flex-col items-center gap-2">
+          <BrandLogo size="sm" className="opacity-85" />
+          <span>© {new Date().getFullYear()} Viajes Zeppelin</span>
         </p>
       </div>
     </div>

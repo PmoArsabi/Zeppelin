@@ -1,3 +1,4 @@
+import { formatDateDDMMYYYY } from '@/lib/formatDate'
 import type { CampoAuditoria } from './types'
 
 export const VACIO_AUDITORIA = '(vacío)'
@@ -14,10 +15,8 @@ export function displayValorAuditoria(value: unknown): string {
 
 /** Fecha ISO → DD/MM/YYYY */
 export function formatFechaAuditoria(iso: unknown): string {
-  const s = String(iso ?? '').trim().slice(0, 10)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return displayValorAuditoria(iso)
-  const [y, m, d] = s.split('-')
-  return `${d}/${m}/${y}`
+  const formatted = formatDateDDMMYYYY(iso == null ? '' : String(iso))
+  return formatted === '—' ? displayValorAuditoria(iso) : formatted
 }
 
 /** Línea con prefijo para colorear en UI: [+], [-], [~] */

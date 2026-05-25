@@ -1,4 +1,5 @@
 import { useAuth } from '../context/AuthContext'
+import PageTitle from '../components/ui/PageTitle'
 
 export default function DashboardPage() {
   const { user, signOut } = useAuth()
@@ -11,9 +12,7 @@ export default function DashboardPage() {
             {user?.email?.[0].toUpperCase()}
           </span>
         </div>
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
-          ¡Bienvenido!
-        </h1>
+        <PageTitle className="text-xl mb-1">¡Bienvenido!</PageTitle>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 break-all">
           {user?.email}
         </p>
