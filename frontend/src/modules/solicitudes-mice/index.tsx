@@ -6,5 +6,6 @@ export const solicitudesMiceModule: ModuleDefinition = {
   id: 'solicitudes-mice',
   label: 'Solicitud MICE',
   icon: <MiceIcon />,
+  unidad: 'mice',
   component: SolicitudesMiceModule,
 }

@@ -1,19 +1,17 @@
 import { useAuth } from '@/context/AuthContext'
-import { canAccessModule, getModule, getNavItems } from './registry'
+import { canAccessModule, getModule, getNavItems, MODULES } from './registry'
 import type { ModuleHostProps } from './types'
-import { MODULES } from './registry'
 
-/** Renderiza el módulo activo; redirige al primer módulo accesible si no hay permiso */
 export default function ModuleHost({ activeModule, onNavigate, instanceKey = 0 }: ModuleHostProps) {
-  const { role } = useAuth()
+  const { role, unidades } = useAuth()
 
   const accessibleDefault = () => {
-    const navItems = getNavItems(role)
-    const firstId = navItems[0]?.id
+    const items = getNavItems(role, unidades)
+    const firstId = items[0]?.id
     return firstId ? getModule(firstId) : MODULES[0]
   }
 
-  const mod = canAccessModule(activeModule, role)
+  const mod = canAccessModule(activeModule, role, unidades)
     ? getModule(activeModule)
     : accessibleDefault()
 

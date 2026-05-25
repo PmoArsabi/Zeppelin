@@ -174,13 +174,13 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 // ── Panel de detalle ──────────────────────────────────────────────────────────
-function DetailPanel({ s, onClose, onEdit, onToggleStatus, onAnular, actioning }: {
+function DetailPanel({ s, onClose, onEdit, onAnular, actioning, canEdit }: {
   s: Solicitud
   onClose: () => void
   onEdit: () => void
-  onToggleStatus: () => void
   onAnular: () => void
   actioning: boolean
+  canEdit: boolean
 }) {
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -296,6 +296,7 @@ function DetailPanel({ s, onClose, onEdit, onToggleStatus, onAnular, actioning }
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 dark:border-gray-800 space-y-2.5">
           <div className="flex items-center gap-2.5">
+            {canEdit && (
             <Button onClick={onEdit} variant="secondary" className="flex-1 justify-center" disabled={actioning}>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -303,31 +304,7 @@ function DetailPanel({ s, onClose, onEdit, onToggleStatus, onAnular, actioning }
               </svg>
               Editar
             </Button>
-            <Button
-              onClick={onToggleStatus}
-              loading={actioning}
-              className={`flex-1 justify-center ${
-                s.status
-                  ? 'bg-amber-500! hover:bg-amber-600! shadow-amber-500/20'
-                  : 'bg-emerald-600! hover:bg-emerald-700! shadow-emerald-600/20'
-              }`}
-            >
-              {s.status ? (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                  </svg>
-                  Inactivar
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Activar
-                </>
-              )}
-            </Button>
+            )}
           </div>
           {s.estado !== 'ANULADO' && (
             <Button
@@ -358,7 +335,7 @@ interface Props {
 }
 
 export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate }: Props) {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, hasPermission } = useAuth()
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState<string | null>(null)
@@ -446,22 +423,6 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
     setTimeout(() => setSuccessMsg(null), 4000)
   }
 
-  const handleToggleStatus = async () => {
-    if (!detail) return
-    setActioning(true)
-    const newStatus = !detail.status
-    const { error } = await supabase
-      .from('th_solicitud_corporativos')
-      .update({ status: newStatus })
-      .eq('id', detail.id)
-    if (error) setError(error.message)
-    else {
-      updateLocal(detail.id, { status: newStatus })
-      flash(newStatus ? 'Solicitud activada.' : 'Solicitud inactivada.')
-    }
-    setActioning(false)
-  }
-
   const handleAnular = async () => {
     if (!detail) return
     setActioning(true)
@@ -491,9 +452,9 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
           s={detail}
           onClose={() => setDetail(null)}
           onEdit={() => { setDetail(null); onEdit(detail) }}
-          onToggleStatus={handleToggleStatus}
           onAnular={handleAnular}
           actioning={actioning}
+          canEdit={hasPermission('corp', 'editar')}
         />
       )}
 
@@ -503,12 +464,14 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
             <PageTitle>Solicitud Corporativo</PageTitle>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{countLabel}</p>
           </div>
-          <Button onClick={onNew} size="md">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            Nueva solicitud
-          </Button>
+          {hasPermission('corp', 'crear') && (
+            <Button onClick={onNew} size="md">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Nueva solicitud
+            </Button>
+          )}
         </div>
 
         {successMsg && <Alert variant="success" className="mb-5">{successMsg}</Alert>}
@@ -645,6 +608,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                             </svg>
                           </button>
                           {/* Editar */}
+                          {hasPermission('corp', 'editar') && (
                           <button
                             type="button"
                             onClick={() => onEdit(s)}
@@ -658,33 +622,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                                 d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                          {/* Activar / Inactivar */}
-                          <button
-                            onClick={async () => {
-                              const newStatus = !s.status
-                              const { error } = await supabase.from('th_solicitud_corporativos').update({ status: newStatus }).eq('id', s.id)
-                              if (!error) {
-                                updateLocal(s.id, { status: newStatus })
-                                flash(newStatus ? 'Solicitud activada.' : 'Solicitud inactivada.')
-                              }
-                            }}
-                            title={s.status ? 'Inactivar' : 'Activar'}
-                            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors
-                              ${s.status
-                                ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-500/10'
-                                : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:text-emerald-400 dark:hover:bg-emerald-500/10'
-                              }`}
-                          >
-                            {s.status ? (
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                              </svg>
-                            ) : (
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            )}
-                          </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -749,6 +687,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                       </svg>
                       Ver
                     </button>
+                    {hasPermission('corp', 'editar') && (
                     <button
                       onClick={() => onEdit(s)}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl
@@ -761,37 +700,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                       </svg>
                       Editar
                     </button>
-                    <button
-                      onClick={async () => {
-                        const newStatus = !s.status
-                        const { error } = await supabase.from('th_solicitud_corporativos').update({ status: newStatus }).eq('id', s.id)
-                        if (!error) {
-                          updateLocal(s.id, { status: newStatus })
-                          flash(newStatus ? 'Solicitud activada.' : 'Solicitud inactivada.')
-                        }
-                      }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl transition-colors
-                        ${s.status
-                          ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20'
-                          : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20'
-                        }`}
-                    >
-                      {s.status ? (
-                        <>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                          </svg>
-                          Inactivar
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Activar
-                        </>
-                      )}
-                    </button>
+                    )}
                   </div>
                 </div>
               ))}

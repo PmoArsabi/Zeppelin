@@ -18,15 +18,22 @@ interface UserRow {
   role: string
   created_at: string
   disabled: boolean
+  unidades: string[]
 }
 
-type RoleOption = 'admin' | 'coordinador_mice' | 'asesor_mice' | 'tiqueteador_mice'
+type RoleOption = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador'
+type UnidadSlug = 'mice' | 'corp'
 
 const ROLE_OPTIONS: { value: RoleOption; label: string }[] = [
-  { value: 'admin',            label: 'Administrador' },
-  { value: 'coordinador_mice', label: 'Coordinador MICE' },
-  { value: 'asesor_mice',      label: 'Asesor MICE' },
-  { value: 'tiqueteador_mice', label: 'Tiqueteador MICE' },
+  { value: 'admin',        label: 'Administrador' },
+  { value: 'coordinador',  label: 'Coordinador' },
+  { value: 'asesor',       label: 'Asesor' },
+  { value: 'tiqueteador',  label: 'Tiqueteador' },
+]
+
+const UNIDAD_OPTIONS: { value: UnidadSlug; label: string }[] = [
+  { value: 'mice', label: 'MICE' },
+  { value: 'corp', label: 'Corporativo' },
 ]
 
 interface NewUserForm {
@@ -34,10 +41,11 @@ interface NewUserForm {
   display_name: string
   role: RoleOption
   password: string
+  unidades: UnidadSlug[]
 }
 
 const EMPTY_FORM: NewUserForm = {
-  email: '', display_name: '', role: 'asesor_mice', password: '',
+  email: '', display_name: '', role: 'asesor', password: '', unidades: [],
 }
 
 interface Props {
@@ -46,8 +54,8 @@ interface Props {
 
 // ── Modal crear usuario ───────────────────────────────────────────────────────
 function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm]           = useState<NewUserForm>(EMPTY_FORM)
-  const [errors, setErrors]       = useState<Partial<NewUserForm>>({})
+  const [form, setForm]             = useState<NewUserForm>(EMPTY_FORM)
+  const [errors, setErrors]         = useState<Partial<Record<keyof NewUserForm, string>>>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -56,13 +64,25 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     if (errors[key]) setErrors(prev => ({ ...prev, [key]: undefined }))
   }
 
+  const toggleUnidad = (slug: UnidadSlug) => {
+    setForm(prev => ({
+      ...prev,
+      unidades: prev.unidades.includes(slug)
+        ? prev.unidades.filter(u => u !== slug)
+        : [...prev.unidades, slug],
+    }))
+    setErrors(prev => ({ ...prev, unidades: undefined }))
+  }
+
   const validate = () => {
-    const e: Partial<NewUserForm> = {}
+    const e: Partial<Record<keyof NewUserForm, string>> = {}
     if (!form.display_name.trim()) e.display_name = 'El nombre es obligatorio.'
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = 'Ingresa un correo válido.'
     if (form.password && form.password.trim().length < 8)
       e.password = 'La contraseña debe tener al menos 8 caracteres.'
+    if (form.role !== 'admin' && form.unidades.length === 0)
+      e.unidades = 'Selecciona al menos una unidad.'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -87,6 +107,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             email: form.email.trim().toLowerCase(),
             display_name: form.display_name.trim(),
             role: form.role,
+            unidad_slugs: form.role === 'admin' ? [] : form.unidades,
             ...(form.password.trim() ? { password: form.password.trim() } : {}),
           }),
         }
@@ -146,7 +167,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               <CustomSelect
                 id="cn_role"
                 value={form.role}
-                onChange={v => set('role', v as RoleOption)}
+                onChange={v => { set('role', v as RoleOption); if (v === 'admin') set('unidades', []) }}
                 options={ROLE_OPTIONS}
               />
             </FormField>
@@ -155,6 +176,32 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 onChange={e => set('email', e.target.value)}
                 placeholder="usuario@empresa.com" error={!!errors.email} />
             </FormField>
+
+            {/* Unidades — oculto para admin */}
+            {form.role !== 'admin' && (
+              <FormField label="Unidades asignadas" required className="sm:col-span-2" error={errors.unidades}>
+                <div className="flex gap-2 mt-1">
+                  {UNIDAD_OPTIONS.map(u => {
+                    const active = form.unidades.includes(u.value)
+                    return (
+                      <button
+                        key={u.value}
+                        type="button"
+                        onClick={() => toggleUnidad(u.value)}
+                        className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-all
+                          ${active
+                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                            : 'border-slate-200 dark:border-gray-700 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
+                          }`}
+                      >
+                        {u.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </FormField>
+            )}
+
             <FormField label="Contraseña provisional" htmlFor="cn_password" className="sm:col-span-2"
               error={errors.password}
               hint="Opcional. Si la dejas vacía se enviará invitación por correo.">
@@ -197,16 +244,21 @@ function EditModal({ user, onClose, onSaved }: {
 }) {
   const { user: me } = useAuth()
   const [displayName, setDisplayName] = useState(user.display_name)
-  const [role, setRole]               = useState<RoleOption>(user.role as RoleOption)
+  const [role, setRole] = useState<RoleOption>(user.role as RoleOption)
+  const [unidades, setUnidades]       = useState<UnidadSlug[]>((user.unidades ?? []) as UnidadSlug[])
   const [disabled, setDisabled]       = useState(user.disabled)
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
   const isSelf = me?.id === user.id
 
+  const toggleUnidad = (slug: UnidadSlug) =>
+    setUnidades(prev => prev.includes(slug) ? prev.filter(u => u !== slug) : [...prev, slug])
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!displayName.trim()) { setError('El nombre es obligatorio.'); return }
+    if (role !== 'admin' && unidades.length === 0) { setError('Selecciona al menos una unidad.'); return }
     setSaving(true)
     setError(null)
     try {
@@ -224,13 +276,14 @@ function EditModal({ user, onClose, onSaved }: {
             user_id: user.id,
             role,
             display_name: displayName.trim(),
+            unidad_slugs: role === 'admin' ? [] : unidades,
             ...(isSelf ? {} : { disabled }),
           }),
         }
       )
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Error al actualizar.')
-      onSaved({ display_name: displayName.trim(), role, disabled: isSelf ? user.disabled : disabled })
+      onSaved({ display_name: displayName.trim(), role, disabled: isSelf ? user.disabled : disabled, unidades: role === 'admin' ? [] : unidades })
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido.')
@@ -273,6 +326,27 @@ function EditModal({ user, onClose, onSaved }: {
             />
           </FormField>
 
+          {role !== 'admin' && (
+            <FormField label="Unidad(es)" required>
+              <div className="flex gap-2 flex-wrap pt-1">
+                {UNIDAD_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleUnidad(opt.value as UnidadSlug)}
+                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all
+                      ${unidades.includes(opt.value as UnidadSlug)
+                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                        : 'border-slate-200 dark:border-gray-700 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
+                      }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </FormField>
+          )}
+
           {!isSelf && (
             <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
               <div>
@@ -311,11 +385,31 @@ function EditModal({ user, onClose, onSaved }: {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const roleBadge = (role: string) =>
   ({
-    admin:            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">Administrador</span>,
-    coordinador_mice: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Coordinador MICE</span>,
-    asesor_mice:      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">Asesor MICE</span>,
-    tiqueteador_mice: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">Tiqueteador MICE</span>,
+    admin:        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">Administrador</span>,
+    coordinador:  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Coordinador</span>,
+    asesor:       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">Asesor</span>,
+    tiqueteador:  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">Tiqueteador</span>,
   } as Record<string, React.ReactNode>)[role] ?? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-slate-400">{role}</span>
+
+const UNIDAD_LABELS: Record<string, string> = { mice: 'MICE', corp: 'Corp' }
+const UNIDAD_COLORS: Record<string, string> = {
+  mice: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300',
+  corp: 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300',
+}
+
+const unidadesBadges = (unidades: string[]) => {
+  if (!unidades || unidades.length === 0)
+    return <span className="text-xs text-slate-400 dark:text-slate-600 italic">—</span>
+  return (
+    <div className="flex flex-wrap gap-1">
+      {unidades.map(u => (
+        <span key={u} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${UNIDAD_COLORS[u] ?? 'bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-slate-400'}`}>
+          {UNIDAD_LABELS[u] ?? u}
+        </span>
+      ))}
+    </div>
+  )
+}
 
 const statusBadge = (disabled: boolean) =>
   disabled
@@ -436,7 +530,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
               <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 bg-slate-50/60 dark:bg-gray-800/40">
-                    {['Usuario', 'Correo', 'Rol', 'Estado', 'Fecha registro'].map((h, i) => (
+                    {['Usuario', 'Correo', 'Rol', 'Unidad(es)', 'Estado', 'Fecha registro'].map((h, i) => (
                       <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -461,6 +555,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
                       </td>
                       <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={u.email}>{u.email}</td>
                       <td className="px-4 py-3.5">{roleBadge(u.role)}</td>
+                      <td className="px-4 py-3.5">{unidadesBadges(u.unidades)}</td>
                       <td className="px-4 py-3.5">{statusBadge(u.disabled)}</td>
                       <td className="px-4 py-3.5 text-slate-400 dark:text-slate-500 text-xs whitespace-nowrap">{formatDateDDMMYYYY(u.created_at)}</td>
                       <td className="px-4 py-3.5 sticky right-0 bg-white dark:bg-gray-900">
@@ -526,10 +621,15 @@ export default function UsuariosPage({ onNavigate }: Props) {
                     </div>
                     {roleBadge(u.role)}
                   </div>
-                  <div className="flex items-center gap-2 mt-1 mb-3 pl-12">
+                  <div className="flex items-center gap-2 mt-1 pl-12">
                     {statusBadge(u.disabled)}
                     <span className="text-xs text-slate-400 dark:text-slate-500">· Desde {formatDateDDMMYYYY(u.created_at)}</span>
                   </div>
+                  {u.unidades.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1 mb-3 pl-12">
+                      {unidadesBadges(u.unidades)}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-gray-800">
                     <button
                       onClick={() => setEditing(u)}

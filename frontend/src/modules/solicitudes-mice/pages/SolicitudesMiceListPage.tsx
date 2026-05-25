@@ -335,7 +335,7 @@ function MiceSolicitudMobileCard({
 }
 
 export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavigate }: Props) {
-  const { user, isAdmin, permissions } = useAuth()
+  const { user, isAdmin, hasPermission } = useAuth()
   const [rows, setRows] = useState<SolicitudMiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -422,7 +422,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
             <PageTitle>Solicitudes MICE</PageTitle>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{countLabel}</p>
           </div>
-          {permissions.canCreateMice && (
+          {hasPermission('mice', 'crear') && (
             <Button onClick={onNew} size="md" className="w-full sm:w-auto shrink-0">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -532,7 +532,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
                         {fmtMoney(row.valor_cotizado, row.moneda_cotizacion ?? 'COP')}
                       </td>
                       <td className={`${TD} text-right`}>
-                        <MiceRowActions row={row} onView={onView} onEdit={onEdit} canEdit={permissions.canEditMice} layout="icons" />
+                        <MiceRowActions row={row} onView={onView} onEdit={onEdit} canEdit={hasPermission('mice', 'editar')} layout="icons" />
                       </td>
                     </tr>
                   ))}
@@ -542,7 +542,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
 
             <div className="md:hidden divide-y divide-slate-100 dark:divide-gray-800">
               {filtered.map(row => (
-                <MiceSolicitudMobileCard key={row.id} row={row} onView={onView} onEdit={onEdit} canEdit={permissions.canEditMice} />
+                <MiceSolicitudMobileCard key={row.id} row={row} onView={onView} onEdit={onEdit} canEdit={hasPermission('mice', 'editar')} />
               ))}
             </div>
 

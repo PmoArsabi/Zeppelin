@@ -6,8 +6,7 @@ export const solicitudesCorporativosModule: ModuleDefinition = {
   id: 'solicitudes-corporativos',
   label: 'Solicitud Corp',
   icon: <DocumentIcon />,
-  default: true,
-  allowedRoles: ['admin'],
+  unidad: 'corp',
   component: SolicitudesCorporativosModule,
 }
 

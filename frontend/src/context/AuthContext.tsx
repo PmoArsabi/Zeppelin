@@ -4,23 +4,20 @@ import type { ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
-export type UserRole = 'admin' | 'coordinador_mice' | 'asesor_mice' | 'tiqueteador_mice'
+export type UserRole = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador'
+export type UnidadSlug = 'mice' | 'corp'
 
 export interface Permissions {
   isAdmin: boolean
-  canViewMice: boolean
-  canEditMice: boolean
-  canCreateMice: boolean
   canManageUsers: boolean
+  canManageRoles: boolean
 }
 
 function derivePermissions(role: UserRole): Permissions {
   return {
-    isAdmin:        role === 'admin',
-    canViewMice:    true,
-    canEditMice:    role === 'admin' || role === 'coordinador_mice' || role === 'asesor_mice',
-    canCreateMice:  role === 'admin' || role === 'coordinador_mice',
-    canManageUsers: role === 'admin',
+    isAdmin:         role === 'admin',
+    canManageUsers:  role === 'admin',
+    canManageRoles:  role === 'admin',
   }
 }
 
@@ -29,8 +26,10 @@ interface AuthContextValue {
   session: Session | null
   loading: boolean
   role: UserRole
+  unidades: UnidadSlug[]
   permissions: Permissions
   isAdmin: boolean
+  hasPermission: (unidad: UnidadSlug, permiso: string) => boolean
   signOut: () => Promise<void>
 }
 
@@ -40,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [unidades, setUnidades] = useState<UnidadSlug[]>([])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -56,15 +56,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const VALID_ROLES: UserRole[] = ['admin', 'coordinador_mice', 'asesor_mice', 'tiqueteador_mice']
+  // Cargar unidades asignadas al usuario
+  useEffect(() => {
+    if (!user) { setUnidades([]); return }
+
+    const rawRole = user.app_metadata?.role
+    if (rawRole === 'admin') {
+      // Admin ve todas las unidades
+      setUnidades(['mice', 'corp'])
+      return
+    }
+
+    supabase
+      .rpc('rbac_get_mis_unidades')
+      .then(({ data }) => {
+        const slugs = (data ?? [])
+          .map((row: { slug: string }) => row.slug)
+          .filter((s: string | undefined): s is UnidadSlug => !!s)
+        setUnidades(slugs)
+      })
+  }, [user])
+
+  const VALID_ROLES: UserRole[] = ['admin', 'coordinador', 'asesor', 'tiqueteador']
   const rawRole = user?.app_metadata?.role
-  const role: UserRole = VALID_ROLES.includes(rawRole) ? rawRole : 'asesor_mice'
+  const role: UserRole = VALID_ROLES.includes(rawRole) ? rawRole : 'tiqueteador'
   const permissions = derivePermissions(role)
+
+  // Permisos por unidad — el admin tiene todo; el resto se evalúa en BD via RLS.
+  // Esta función es para controles de UI (mostrar/ocultar botones).
+  // La seguridad real la hace RLS en el servidor.
+  function hasPermission(unidad: UnidadSlug, permiso: string): boolean {
+    if (role === 'admin') return true
+    if (!unidades.includes(unidad)) return false
+    const permisosPorRol: Record<UserRole, string[]> = {
+      admin:       ['ver', 'crear', 'editar', 'eliminar'],
+      coordinador: ['ver', 'crear', 'editar'],
+      asesor:      ['ver', 'editar'],
+      tiqueteador: ['ver'],
+    }
+    return permisosPorRol[role]?.includes(permiso) ?? false
+  }
 
   const signOut = async () => { await supabase.auth.signOut() }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, permissions, isAdmin: permissions.isAdmin, signOut }}>
+    <AuthContext.Provider value={{
+      user, session, loading, role, unidades, permissions,
+      isAdmin: permissions.isAdmin, hasPermission, signOut,
+    }}>
       {children}
     </AuthContext.Provider>
   )

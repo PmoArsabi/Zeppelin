@@ -35,17 +35,17 @@ function ThemeToggle() {
   )
 }
 
-export default function AppShell({ children, activeModule = 'solicitudes-corporativos', onNavigate }: AppShellProps) {
-  const { user, signOut, role } = useAuth()
+export default function AppShell({ children, activeModule = 'solicitudes-mice', onNavigate }: AppShellProps) {
+  const { user, signOut, role, unidades } = useAuth()
   const ROLE_LABELS: Record<typeof role, string> = {
-    admin: 'Administrador',
-    coordinador_mice: 'Coordinador MICE',
-    asesor_mice: 'Asesor MICE',
-    tiqueteador_mice: 'Tiqueteador MICE',
+    admin:        'Administrador',
+    coordinador:  'Coordinador',
+    asesor:       'Asesor',
+    tiqueteador:  'Tiqueteador',
   }
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const navItems = getNavItems(role)
+  const navItems = getNavItems(role, unidades)
 
   const NavItem = ({ item }: { item: (typeof navItems)[number] }) => {
     const active = activeModule === item.id
