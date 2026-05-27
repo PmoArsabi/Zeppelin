@@ -2,7 +2,6 @@ import type { ModuleDefinition, ModuleId, ModuleNavItem } from './types'
 import type { UserRole, UnidadSlug } from '@/context/AuthContext'
 import { solicitudesCorporativosModule } from './solicitudes-corporativos'
 import { solicitudesMiceModule } from './solicitudes-mice'
-import { kpiMiceModule } from './kpi-mice'
 import { usuariosModule } from './usuarios'
 import { rolesPermisosModule } from './roles-permisos'
 
@@ -10,7 +9,6 @@ import { rolesPermisosModule } from './roles-permisos'
 export const MODULES: ModuleDefinition[] = [
   solicitudesCorporativosModule,
   solicitudesMiceModule,
-  kpiMiceModule,
   usuariosModule,
   rolesPermisosModule,
 ]

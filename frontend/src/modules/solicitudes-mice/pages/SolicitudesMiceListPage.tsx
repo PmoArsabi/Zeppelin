@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import AppShell from '@/components/layout/AppShell'
 import Button from '@/components/ui/Button'
 import PageTitle from '@/components/ui/PageTitle'
 import Alert from '@/components/ui/Alert'
@@ -8,7 +7,6 @@ import Badge from '@/components/ui/Badge'
 import CollapsibleFilterPanel from '@/components/filters/CollapsibleFilterPanel'
 import FilterMultiSelect from '@/components/filters/FilterMultiSelect'
 import FilterSearchField from '@/components/filters/FilterSearchField'
-import type { NavigateFn } from '@/modules'
 import type { SolicitudMiceRow } from '../types'
 import { listSolicitudesMice } from '../services/solicitudesMiceService'
 import { fetchMiceCatalogos } from '../services/miceCatalogosService'
@@ -17,14 +15,289 @@ import { MICE_CATALOGOS_VACIOS } from '../types/mice-catalogos'
 import { formatDateDDMMYYYY } from '@/lib/formatDate'
 import MiceEstadoKpiBar, { buildMiceEstadoKpiItems } from '../components/MiceEstadoKpiBar'
 
+// ── KPI Matrix helpers ────────────────────────────────────────────────────────
+
+const ESTADO_ORDER = ['Cotización enviada', 'En cotización', 'En cierre', 'En operación']
+
+function sortBySpanish(a: string, b: string) { return a.localeCompare(b, 'es') }
+
+function sortEstados(estados: string[]): string[] {
+  const order = new Map(ESTADO_ORDER.map((e, i) => [e.toLowerCase(), i]))
+  return [...estados].sort((a, b) => {
+    const ia = order.get(a.toLowerCase()) ?? 99
+    const ib = order.get(b.toLowerCase()) ?? 99
+    return ia !== ib ? ia - ib : sortBySpanish(a, b)
+  })
+}
+
+function rowResponsable(row: SolicitudMiceRow) { return row.responsable_nombre?.trim() || 'Sin responsable' }
+function rowEstado(row: SolicitudMiceRow)      { return row.estado?.trim() || 'Sin estado' }
+function rowAnio(row: SolicitudMiceRow)        { return String(row.anio || row.fecha_solicitud?.slice(0, 4) || 'Sin año') }
+
+
+
+interface ResponsableKpi {
+  responsable: string
+  total: number
+  estados: Map<string, number>
+}
+
+function MiceResponsableMatrix({
+  rows,
+  filters,
+  onFiltersChange,
+  expanded,
+  onToggleExpanded,
+}: {
+  rows: SolicitudMiceRow[]
+  filters: MiceFilters
+  onFiltersChange: (f: MiceFilters) => void
+  expanded: boolean
+  onToggleExpanded: () => void
+}) {
+  const [selectedResp, setSelectedResp] = useState<string | null>(null)
+
+  // Cuando cambia el filtro de responsable desde el FilterBar externo, sincroniza la selección visual
+  useEffect(() => {
+    if (filters.responsable.length === 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedResp(filters.responsable[0])
+    } else {
+      setSelectedResp(null)
+    }
+  }, [filters.responsable])
+
+  // La matriz filtra por año y estado del panel compartido (no por responsable — lo muestra todo)
+  const filteredRows = useMemo(() => rows.filter(r => {
+    if (filters.anio.length   && !filters.anio.includes(rowAnio(r)))     return false
+    if (filters.estado.length && !filters.estado.includes(rowEstado(r))) return false
+    return true
+  }), [rows, filters])
+
+  const estadoColumns = useMemo(() => {
+    const s = new Set<string>()
+    for (const r of filteredRows) s.add(rowEstado(r))
+    return sortEstados([...s])
+  }, [filteredRows])
+
+  const responsableKpis = useMemo<ResponsableKpi[]>(() => {
+    const map = new Map<string, ResponsableKpi>()
+    for (const r of filteredRows) {
+      const resp = rowResponsable(r)
+      const est  = rowEstado(r)
+      const cur = map.get(resp) ?? { responsable: resp, total: 0, estados: new Map() }
+      cur.total++
+      cur.estados.set(est, (cur.estados.get(est) ?? 0) + 1)
+      map.set(resp, cur)
+    }
+    return [...map.values()].sort((a, b) => b.total - a.total || sortBySpanish(a.responsable, b.responsable))
+  }, [filteredRows])
+
+  const estadoTotals = useMemo(() => {
+    const t = new Map<string, number>()
+    for (const r of filteredRows) t.set(rowEstado(r), (t.get(rowEstado(r)) ?? 0) + 1)
+    return t
+  }, [filteredRows])
+
+  const totalGeneral = filteredRows.length
+  const maxTotal = Math.max(1, ...responsableKpis.map(r => r.total))
+  const hasSelection = selectedResp !== null
+
+  const handleClickResponsable = (resp: string) => {
+    const toggled = selectedResp === resp ? null : resp
+    setSelectedResp(toggled)
+    onFiltersChange({ ...filters, responsable: toggled ? [toggled] : [] })
+  }
+
+  const handleClickCelda = (resp: string, estado: string) => {
+    setSelectedResp(resp)
+    onFiltersChange({ ...filters, responsable: [resp], estado: [estado] })
+  }
+
+  const handleClickEstado = (estado: string) => {
+    setSelectedResp(null)
+    onFiltersChange({ ...filters, estado: [estado], responsable: [] })
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm mb-4 overflow-visible">
+      {/* Header — mismo patrón que CollapsibleFilterPanel */}
+      <div className="px-3 sm:px-4 py-3 flex items-center justify-between gap-2 sm:gap-3 flex-wrap relative z-10 overflow-visible">
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          aria-expanded={expanded}
+          className="flex items-center gap-2 text-left min-w-0 rounded-lg -ml-1 px-1 py-0.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+        >
+          <svg
+            className={`w-4 h-4 shrink-0 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Carga por responsable</span>
+          {hasSelection && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400">
+              Activos
+            </span>
+          )}
+        </button>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline underline-offset-2"
+          >
+            {expanded ? 'Ocultar' : 'Mostrar'}
+          </button>
+        </div>
+      </div>
+
+      <div className={`grid transition-all duration-300 ease-in-out ${expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+        <div className="border-t border-slate-200 dark:border-gray-700" />
+        <div className="overflow-x-auto overflow-y-hidden rounded-b-2xl">
+        <table className="w-full min-w-190 text-xs">
+          <thead>
+            <tr className="text-left border-b border-slate-200 dark:border-gray-700">
+              <th className="px-4 py-3 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 w-52">
+                Responsable
+              </th>
+              {estadoColumns.map(estado => (
+                <th key={estado} className="px-3 py-3 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 text-right">
+                  <button
+                    type="button"
+                    onClick={() => handleClickEstado(estado)}
+                    className="rounded-lg px-1.5 py-0.5 transition-colors hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+                    title={`Filtrar tabla por estado "${estado}"`}
+                  >
+                    {estado}
+                  </button>
+                </th>
+              ))}
+              <th className="px-4 py-3 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 text-right">
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {responsableKpis.length === 0 ? (
+              <tr>
+                <td colSpan={estadoColumns.length + 2} className="px-4 py-10 text-center text-slate-400 dark:text-slate-500">
+                  Sin datos para los filtros aplicados.
+                </td>
+              </tr>
+            ) : (
+              responsableKpis
+                .filter(stat => selectedResp === null || stat.responsable === selectedResp)
+                .map(stat => {
+                const isSelected = selectedResp === stat.responsable
+                return (
+                  <tr
+                    key={stat.responsable}
+                    className={`border-b border-slate-200 dark:border-gray-700 last:border-b-0 transition-colors
+                      ${isSelected
+                        ? 'bg-indigo-50/60 dark:bg-indigo-500/10'
+                        : 'hover:bg-slate-50/60 dark:hover:bg-gray-800/30'
+                      }`}
+                  >
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => handleClickResponsable(stat.responsable)}
+                        className="w-full text-left group"
+                        title={isSelected ? `Quitar filtro de ${stat.responsable}` : `Filtrar por ${stat.responsable}`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className={`font-semibold truncate ${isSelected ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>
+                            {stat.responsable}
+                          </span>
+                          {/* Porcentaje siempre sobre el total general, no sobre el seleccionado */}
+                          <span className="shrink-0 text-[10px] font-semibold text-slate-400 dark:text-slate-500 tabular-nums">
+                            {totalGeneral > 0 ? `${Math.round((stat.total / totalGeneral) * 100)}%` : '0%'}
+                          </span>
+                        </span>
+                        <span className="block mt-1 h-1.5 bg-slate-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <span
+                            className={`block h-full rounded-full transition-colors ${isSelected ? 'bg-indigo-600' : 'bg-indigo-500 group-hover:bg-indigo-600'}`}
+                            style={{ width: `${(stat.total / maxTotal) * 100}%` }}
+                          />
+                        </span>
+                      </button>
+                    </td>
+                    {estadoColumns.map(estado => {
+                      const count = stat.estados.get(estado) ?? 0
+                      return (
+                        <td key={estado} className="px-3 py-3 text-right">
+                          {count > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleClickCelda(stat.responsable, estado)}
+                              className={`inline-flex min-w-8 justify-center rounded-lg px-2 py-1 font-semibold transition-colors
+                                ${isSelected
+                                  ? 'text-indigo-800 dark:text-indigo-200 bg-indigo-100 dark:bg-indigo-500/20 hover:bg-indigo-200 dark:hover:bg-indigo-500/30'
+                                  : 'text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20'
+                                }`}
+                              title={`Filtrar tabla: ${stat.responsable} / ${estado}`}
+                            >
+                              {count}
+                            </button>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">—</span>
+                          )}
+                        </td>
+                      )
+                    })}
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleClickResponsable(stat.responsable)}
+                        className={`font-bold ${isSelected ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400'}`}
+                      >
+                        {stat.total}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+          {responsableKpis.length > 0 && (
+            <tfoot>
+              <tr className="bg-slate-50 dark:bg-gray-800/60 border-t border-slate-200 dark:border-gray-700">
+                <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-100">Total general</td>
+                {estadoColumns.map(estado => (
+                  <td key={estado} className="px-3 py-3 text-right font-bold text-slate-800 dark:text-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => handleClickEstado(estado)}
+                      className="hover:text-indigo-600 dark:hover:text-indigo-400"
+                    >
+                      {estadoTotals.get(estado) ?? 0}
+                    </button>
+                  </td>
+                ))}
+                <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">{totalGeneral}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+        </div>{/* overflow-x-auto */}
+        </div>{/* overflow-hidden */}
+      </div>{/* grid animado */}
+    </div>
+  )
+}
+
 interface Props {
   onNew: () => void
   onEdit: (row: SolicitudMiceRow) => void
   onView: (row: SolicitudMiceRow) => void
-  onNavigate: NavigateFn
+  initialFilters?: Partial<MiceFilters>
 }
 
-interface MiceFilters {
+export interface MiceFilters {
   cliente: string[]
   responsable: string[]
   anio: string[]
@@ -100,12 +373,14 @@ function FilterBar({
   total,
   filtered,
   options,
+  forceExpandTrigger,
 }: {
   filters: MiceFilters
   onChange: (f: MiceFilters) => void
   onClear: () => void
   total: number
   filtered: number
+  forceExpandTrigger?: number
   options: {
     clientes: string[]
     responsables: string[]
@@ -129,6 +404,7 @@ function FilterBar({
       total={total}
       filtered={filtered}
       storageKey="zeppelin.filters.mice.expanded"
+      forceExpandTrigger={forceExpandTrigger}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
         <FilterSearchField
@@ -334,13 +610,18 @@ function MiceSolicitudMobileCard({
   )
 }
 
-export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavigate }: Props) {
-  const { user, hasPermission } = useAuth()
+export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initialFilters }: Props) {
+  const { user, hasPermission, role } = useAuth()
+  const canSeeMatrix = role === 'admin' || role === 'coordinador'
   const [rows, setRows] = useState<SolicitudMiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState<MiceFilters>(EMPTY_FILTERS)
+  const [filters, setFilters] = useState<MiceFilters>({ ...EMPTY_FILTERS, ...initialFilters })
   const [catalog, setCatalog] = useState<MiceCatalogos>(MICE_CATALOGOS_VACIOS)
+  const [matrixExpanded, setMatrixExpanded] = useState(() => {
+    const s = localStorage.getItem('zeppelin.mice.matrix.expanded')
+    return s === null ? true : s === 'true'
+  })
 
   const load = useCallback(async () => {
     if (!user) return
@@ -415,8 +696,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
       : `${rows.length} registro${rows.length !== 1 ? 's' : ''}`
 
   return (
-    <AppShell activeModule="solicitudes-mice" onNavigate={onNavigate}>
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-10 min-w-0">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-10 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
           <div className="min-w-0">
             <PageTitle>Solicitudes MICE</PageTitle>
@@ -456,6 +736,22 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
             total={rows.length}
             filtered={filtered.length}
             options={filterOptions}
+          />
+        )}
+
+        {!loading && rows.length > 0 && canSeeMatrix && (
+          <MiceResponsableMatrix
+            rows={rows}
+            filters={filters}
+            onFiltersChange={setFilters}
+            expanded={matrixExpanded}
+            onToggleExpanded={() => {
+              setMatrixExpanded(v => {
+                const next = !v
+                localStorage.setItem('zeppelin.mice.matrix.expanded', String(next))
+                return next
+              })
+            }}
           />
         )}
 
@@ -558,6 +854,5 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
           </div>
         )}
       </div>
-    </AppShell>
   )
 }

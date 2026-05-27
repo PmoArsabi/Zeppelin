@@ -20,7 +20,7 @@ export default function SaveFeedbackOverlay({ feedback, onDismiss }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-[2px]"
+      className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-busy={status === 'saving'}
@@ -52,7 +52,7 @@ export default function SaveFeedbackOverlay({ feedback, onDismiss }: Props) {
           {title}
         </h2>
         {detail && (
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 break-words">{detail}</p>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 wrap-break-word">{detail}</p>
         )}
         {status === 'saving' && (
           <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">

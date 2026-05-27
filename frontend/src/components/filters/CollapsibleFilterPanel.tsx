@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 
 interface CollapsibleFilterPanelProps {
   children: ReactNode
@@ -9,6 +9,8 @@ interface CollapsibleFilterPanelProps {
   /** Persiste expandido/colapsado entre visitas */
   storageKey?: string
   defaultExpanded?: boolean
+  /** Incrementar este valor desde afuera fuerza la expansión (p.ej. al inyectar filtros desde la matriz KPI) */
+  forceExpandTrigger?: number
 }
 
 function readStoredExpanded(key: string | undefined, fallback: boolean): boolean {
@@ -27,10 +29,19 @@ export default function CollapsibleFilterPanel({
   filtered,
   storageKey,
   defaultExpanded = true,
+  forceExpandTrigger,
 }: CollapsibleFilterPanelProps) {
   const [expanded, setExpanded] = useState(() =>
     readStoredExpanded(storageKey, defaultExpanded)
   )
+
+  // Abre el panel cuando se inyectan filtros externos (p.ej. desde la matriz KPI)
+  useEffect(() => {
+    if (forceExpandTrigger) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExpanded(true)
+    }
+  }, [forceExpandTrigger])
 
   const toggle = useCallback(() => {
     setExpanded(prev => {
@@ -41,8 +52,8 @@ export default function CollapsibleFilterPanel({
   }, [storageKey])
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-3 sm:p-4 mb-4 sm:mb-5">
-      <div className="flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm mb-4">
+      <div className="px-3 sm:px-4 py-3 flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
         <button
           type="button"
           onClick={toggle}
@@ -70,13 +81,6 @@ export default function CollapsibleFilterPanel({
         </button>
 
         <div className="flex items-center gap-2 shrink-0">
-          {!expanded && active && (
-            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{filtered}</span>
-              <span className="text-slate-400"> / </span>
-              <span className="font-semibold">{total}</span>
-            </p>
-          )}
           <button
             type="button"
             onClick={toggle}
@@ -101,17 +105,19 @@ export default function CollapsibleFilterPanel({
         </div>
       </div>
 
-      {expanded && (
-        <div className="mt-3 space-y-3">
-          {children}
-          {active && (
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Mostrando <span className="font-semibold text-slate-600 dark:text-slate-300">{filtered}</span> de{' '}
-              <span className="font-semibold">{total}</span> registros
-            </p>
-          )}
+      <div className={`grid transition-all duration-300 ease-in-out ${expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+          <div className="px-3 sm:px-4 pb-3 pt-3 border-t border-slate-100 dark:border-gray-800 space-y-3">
+            {children}
+            {active && (
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Mostrando <span className="font-semibold text-slate-600 dark:text-slate-300">{filtered}</span> de{' '}
+                <span className="font-semibold">{total}</span> registros
+              </p>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

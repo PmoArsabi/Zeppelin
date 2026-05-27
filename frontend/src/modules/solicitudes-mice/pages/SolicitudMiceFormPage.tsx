@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react
 import { fetchClientesZeppelinCatalog, clientesToIdOptions, buildClienteNombreById } from '@/lib/clientes'
 import { parseDecimalCO } from '@/lib/decimalFormat'
 import { useAuth } from '@/context/AuthContext'
-import AppShell from '@/components/layout/AppShell'
 import { Card } from '@/components/ui/Card'
 import FormField from '@/components/ui/FormField'
 import PageTitle from '@/components/ui/PageTitle'
@@ -14,7 +13,6 @@ import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
 import SaveFeedbackOverlay, { type SaveFeedbackState } from '@/components/ui/SaveFeedbackOverlay'
-import type { NavigateFn } from '@/modules'
 import {
   INITIAL_FORM_MICE,
   type SolicitudMiceForm,
@@ -215,7 +213,6 @@ interface Props {
   readOnly?: boolean
   onSaved: () => void
   onCancel: () => void
-  onNavigate: NavigateFn
 }
 
 export default function SolicitudMiceFormPage({
@@ -223,7 +220,6 @@ export default function SolicitudMiceFormPage({
   readOnly = false,
   onSaved,
   onCancel,
-  onNavigate,
 }: Props) {
   const { user } = useAuth()
   const isEdit = editTarget !== null
@@ -598,8 +594,7 @@ export default function SolicitudMiceFormPage({
   )
 
   return (
-    <AppShell activeModule="solicitudes-mice" onNavigate={onNavigate}>
-      <div className="w-full min-w-0 px-4 sm:px-5 lg:px-6 py-8 sm:py-10">
+    <div className="w-full min-w-0 px-4 sm:px-5 lg:px-6 py-8 sm:py-10">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           {nav}
           {lock && (
@@ -1048,6 +1043,5 @@ export default function SolicitudMiceFormPage({
           }
         />
       </div>
-    </AppShell>
   )
 }
