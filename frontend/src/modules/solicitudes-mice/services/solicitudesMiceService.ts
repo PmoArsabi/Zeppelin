@@ -38,6 +38,29 @@ const TABLE = 'th_solicitud_mice'
 
 export type TiqueteadorOption = { value: string; label: string }
 
+type UserWithRolesRow = {
+  id: string
+  display_name: string | null
+  role: string | null
+  disabled: boolean | null
+  unidades: string[] | string | null
+}
+
+function normalizeUnidadSlugs(value: UserWithRolesRow['unidades']): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : String(value ?? '')
+      .replace(/[{}"]/g, '')
+      .split(',')
+
+  return raw.map(u => u.trim().toLowerCase()).filter(Boolean)
+}
+
+function hasOnlyMiceUnidad(value: UserWithRolesRow['unidades']): boolean {
+  const unidades = normalizeUnidadSlugs(value)
+  return unidades.length === 1 && unidades[0] === 'mice'
+}
+
 /** Perfil NA en td_profiles (valor por defecto del tiqueteador). */
 export function isTiqueteadorNaLabel(label: string): boolean {
   const n = label.trim().toLowerCase().replace(/\s+/g, '')
@@ -318,21 +341,44 @@ export async function fetchUsuariosTiqueteador(): Promise<{
   data: { value: string; label: string }[]
   error: string | null
 }> {
-  const { data, error } = await supabase
-    .from('td_profiles')
-    .select('id, display_name')
-    .order('display_name')
+  const { data, error } = await supabase.rpc('list_users_with_roles')
 
   if (error) return { data: [], error: error.message }
 
   const list = sortTiqueteadorOptions(
-    (data ?? [])
-      .filter((row): row is { id: string; display_name: string } => Boolean(row.display_name?.trim()))
+    ((data ?? []) as UserWithRolesRow[])
+      .filter(row => Boolean(row.display_name?.trim()))
+      .filter(row => row.disabled !== true)
+      .filter(row => row.role?.trim().toLowerCase() === 'tiqueteador')
+      .filter(row => hasOnlyMiceUnidad(row.unidades))
       .map(row => ({
         value: row.id,
-        label: row.display_name.trim(),
+        label: row.display_name!.trim(),
       }))
   )
+
+  return { data: list, error: null }
+}
+
+export async function fetchUsuariosResponsablesMice(): Promise<{
+  data: { value: string; label: string }[]
+  error: string | null
+}> {
+  const { data, error } = await supabase.rpc('list_users_with_roles')
+
+  if (error) return { data: [], error: error.message }
+
+  const rolesResponsableMice = new Set(['coordinador', 'tiqueteador', 'asesor'])
+  const list = ((data ?? []) as UserWithRolesRow[])
+    .filter(row => Boolean(row.display_name?.trim()))
+    .filter(row => row.disabled !== true)
+    .filter(row => rolesResponsableMice.has(row.role?.trim().toLowerCase() ?? ''))
+    .filter(row => hasOnlyMiceUnidad(row.unidades))
+    .map(row => ({
+      value: row.id,
+      label: row.display_name!.trim(),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'es'))
 
   return { data: list, error: null }
 }

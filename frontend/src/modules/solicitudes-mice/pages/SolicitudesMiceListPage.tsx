@@ -484,11 +484,12 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
         ) : (
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm overflow-hidden">
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-[960px] text-[11px]">
+              <table className="w-full min-w-[1040px] text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 text-left">
                     <th className={TH}>Fecha solicitud</th>
                     <th className={TH}>Cliente</th>
+                    <th className={TH}>Responsable</th>
                     <th className={TH}>Sector</th>
                     <th className={TH}>MZP</th>
                     <th className={`${TH} min-w-[140px]`}>Nombre</th>
@@ -509,6 +510,9 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
                       </td>
                       <td className={`${TD} max-w-[160px] truncate`} title={row.cliente}>
                         {row.cliente}
+                      </td>
+                      <td className={`${TD} max-w-[140px] truncate`} title={row.responsable_nombre}>
+                        {row.responsable_nombre || '—'}
                       </td>
                       <td className={`${TD} max-w-[100px] truncate text-slate-500`} title={row.sector ?? undefined}>
                         {row.sector ?? '—'}

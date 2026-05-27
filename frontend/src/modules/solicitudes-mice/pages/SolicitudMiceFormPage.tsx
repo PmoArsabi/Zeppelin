@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
 import { fetchClientesZeppelinCatalog, clientesToIdOptions, buildClienteNombreById } from '@/lib/clientes'
 import { parseDecimalCO } from '@/lib/decimalFormat'
 import { useAuth } from '@/context/AuthContext'
@@ -29,6 +28,7 @@ import {
   saveSolicitudMice,
   fetchSectoresMice,
   fetchUsuariosTiqueteador,
+  fetchUsuariosResponsablesMice,
   findTiqueteadorNaOption,
   formatSectorNombre,
 } from '../services/solicitudesMiceService'
@@ -242,6 +242,10 @@ export default function SolicitudMiceFormPage({
   const [sectores, setSectores] = useState<string[]>([])
   const [usuariosTiqueteador, setUsuariosTiqueteador] = useState<{ value: string; label: string }[]>([])
   const [usuariosTiqueteadorError, setUsuariosTiqueteadorError] = useState<string | null>(null)
+  const [usuariosTiqueteadorLoaded, setUsuariosTiqueteadorLoaded] = useState(false)
+  const [usuariosResponsableMice, setUsuariosResponsableMice] = useState<{ value: string; label: string }[]>([])
+  const [usuariosResponsableMiceError, setUsuariosResponsableMiceError] = useState<string | null>(null)
+  const [usuariosResponsableMiceLoaded, setUsuariosResponsableMiceLoaded] = useState(false)
   const [catalog, setCatalog] = useState<MiceCatalogos>(MICE_CATALOGOS_VACIOS)
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogWarning, setCatalogWarning] = useState<string | null>(null)
@@ -264,18 +268,25 @@ export default function SolicitudMiceFormPage({
   }, [saveFeedback, onSaved])
 
   useEffect(() => {
+    setUsuariosTiqueteadorLoaded(false)
+    setUsuariosResponsableMiceLoaded(false)
     Promise.all([
       fetchClientesZeppelinCatalog(),
       fetchSectoresMice(),
       fetchUsuariosTiqueteador(),
+      fetchUsuariosResponsablesMice(),
       fetchMiceCatalogos(),
-    ]).then(([clientesRes, sectoresList, usuariosRes, miceCat]) => {
+    ]).then(([clientesRes, sectoresList, usuariosRes, responsablesRes, miceCat]) => {
       if (clientesRes.error) setClientesError(clientesRes.error)
       setClientesCatalog(clientesRes.data)
       setClientes(clientesToIdOptions(clientesRes.data))
       setSectores(sectoresList)
       if (usuariosRes.error) setUsuariosTiqueteadorError(usuariosRes.error)
       setUsuariosTiqueteador(usuariosRes.data)
+      setUsuariosTiqueteadorLoaded(true)
+      if (responsablesRes.error) setUsuariosResponsableMiceError(responsablesRes.error)
+      setUsuariosResponsableMice(responsablesRes.data)
+      setUsuariosResponsableMiceLoaded(true)
       if (!editTarget) {
         const na = findTiqueteadorNaOption(usuariosRes.data)
         if (na) {
@@ -299,26 +310,46 @@ export default function SolicitudMiceFormPage({
   }, [editTarget])
 
   useEffect(() => {
-    if (!user || editTarget) return
-    supabase
-      .from('td_profiles')
-      .select('display_name')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        setForm(prev => ({
-          ...prev,
-          responsable_id: user.id,
-          responsable_nombre: data?.display_name?.trim() || prev.responsable_nombre || user.email || '',
-        }))
-      })
-  }, [user, editTarget])
+    if (!user || editTarget || !usuariosResponsableMiceLoaded) return
+    const responsable = usuariosResponsableMice.find(u => u.value === user.id)
+    setForm(prev => {
+      if (prev.responsable_id && prev.responsable_id !== user.id) return prev
+      return {
+        ...prev,
+        responsable_id: responsable?.value ?? '',
+        responsable_nombre: responsable?.label ?? '',
+      }
+    })
+  }, [user, editTarget, usuariosResponsableMice, usuariosResponsableMiceLoaded])
+
+  useEffect(() => {
+    if (!usuariosResponsableMiceLoaded || !form.responsable_id) return
+    const isAllowed = usuariosResponsableMice.some(u => u.value === form.responsable_id)
+    if (isAllowed) return
+    setForm(prev => ({
+      ...prev,
+      responsable_id: '',
+      responsable_nombre: '',
+    }))
+  }, [usuariosResponsableMiceLoaded, usuariosResponsableMice, form.responsable_id])
+
+  useEffect(() => {
+    if (!usuariosTiqueteadorLoaded || !form.tiqueteador_user_id) return
+    const isAllowed = usuariosTiqueteador.some(u => u.value === form.tiqueteador_user_id)
+    if (isAllowed) return
+    setForm(prev => ({
+      ...prev,
+      tiqueteador_user_id: '',
+      tiqueteador_asignado: '',
+    }))
+  }, [usuariosTiqueteadorLoaded, usuariosTiqueteador, form.tiqueteador_user_id])
 
   const profileNombreById = useMemo(() => {
     const m = new Map<string, string>()
     for (const u of usuariosTiqueteador) m.set(u.value, u.label)
+    for (const u of usuariosResponsableMice) m.set(u.value, u.label)
     return m
-  }, [usuariosTiqueteador])
+  }, [usuariosTiqueteador, usuariosResponsableMice])
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -411,16 +442,11 @@ export default function SolicitudMiceFormPage({
   }
 
   const responsableOptions = useMemo(() => {
-    const id = form.responsable_id
-    if (id && !usuariosTiqueteador.some(u => u.value === id)) {
-      const label = form.responsable_nombre.trim() || 'Responsable anterior'
-      return [{ value: id, label }, ...usuariosTiqueteador]
-    }
-    return usuariosTiqueteador
-  }, [usuariosTiqueteador, form.responsable_id, form.responsable_nombre])
+    return usuariosResponsableMice
+  }, [usuariosResponsableMice])
 
   const setResponsable = (userId: string) => {
-    const usuario = usuariosTiqueteador.find(u => u.value === userId)
+    const usuario = usuariosResponsableMice.find(u => u.value === userId)
     setForm(prev => ({
       ...prev,
       responsable_id: userId,
@@ -432,13 +458,8 @@ export default function SolicitudMiceFormPage({
   }
 
   const tiqueteadorOptions = useMemo(() => {
-    const id = form.tiqueteador_user_id
-    if (id && !usuariosTiqueteador.some(u => u.value === id)) {
-      const label = form.tiqueteador_asignado.trim() || 'Usuario anterior'
-      return [{ value: id, label }, ...usuariosTiqueteador]
-    }
     return usuariosTiqueteador
-  }, [usuariosTiqueteador, form.tiqueteador_user_id, form.tiqueteador_asignado])
+  }, [usuariosTiqueteador])
 
   const sectorOptions = useMemo(() => {
     const base = catalog.sectores.map(s => ({
@@ -494,6 +515,16 @@ export default function SolicitudMiceFormPage({
     const v = validate(form, catalog, isEdit)
     if (Object.keys(v).length > 0) {
       setErrors(v)
+      setActiveTab('cotizacion')
+      return
+    }
+    if (!usuariosResponsableMice.some(u => u.value === form.responsable_id)) {
+      setErrors({ responsable_id: 'Seleccione un responsable de unidad MICE.' })
+      setActiveTab('cotizacion')
+      return
+    }
+    if (!usuariosTiqueteador.some(u => u.value === form.tiqueteador_user_id)) {
+      setErrors({ tiqueteador_user_id: 'Seleccione un tiqueteador de unidad MICE.' })
       setActiveTab('cotizacion')
       return
     }
@@ -579,6 +610,7 @@ export default function SolicitudMiceFormPage({
         {catalogWarning && <Alert variant="info" className="mb-6">{catalogWarning}</Alert>}
         {clientesError && <Alert variant="error" className="mb-6">{clientesError}</Alert>}
         {usuariosTiqueteadorError && <Alert variant="error" className="mb-6">{usuariosTiqueteadorError}</Alert>}
+        {usuariosResponsableMiceError && <Alert variant="error" className="mb-6">{usuariosResponsableMiceError}</Alert>}
 
         <form onSubmit={handleSubmit} noValidate>
           <Card
@@ -686,16 +718,16 @@ export default function SolicitudMiceFormPage({
                     value={form.responsable_id ?? ''}
                     onChange={setResponsable}
                     placeholder={
-                      usuariosTiqueteadorError
-                        ? 'Error al cargar usuarios'
-                        : usuariosTiqueteador.length === 0
-                          ? 'Sin usuarios con nombre'
+                      usuariosResponsableMiceError
+                        ? 'Error al cargar responsables'
+                        : usuariosResponsableMice.length === 0
+                          ? 'Sin responsables MICE'
                           : 'Seleccionar responsable...'
                     }
                     options={responsableOptions}
                     searchable
                     error={!!errors.responsable_id}
-                    disabled={lock || !!usuariosTiqueteadorError}
+                    disabled={lock || !!usuariosResponsableMiceError}
                   />
                 </FormField>
                 <FormField label="Nombre (evento / grupo)" required htmlFor="nombre" error={errors.nombre}
@@ -798,13 +830,19 @@ export default function SolicitudMiceFormPage({
                     htmlFor="tiqueteador"
                     required
                     error={errors.tiqueteador_user_id}
-                    className="w-full sm:flex-1 sm:min-w-[12rem] min-w-0"
+                    className="w-full sm:flex-1 sm:min-w-48 min-w-0"
                   >
                     <CustomSelect
                       id="tiqueteador"
                       value={form.tiqueteador_user_id ?? ''}
                       onChange={setTiqueteador}
-                      placeholder="Seleccionar..."
+                      placeholder={
+                        usuariosTiqueteadorError
+                          ? 'Error al cargar tiqueteadores'
+                          : usuariosTiqueteador.length === 0
+                            ? 'Sin tiqueteadores MICE'
+                            : 'Seleccionar...'
+                      }
                       error={!!errors.tiqueteador_user_id}
                       options={tiqueteadorOptions}
                       searchable

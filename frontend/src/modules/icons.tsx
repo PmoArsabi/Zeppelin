@@ -18,6 +18,15 @@ export function MiceIcon() {
   )
 }
 
+export function ChartIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+        d="M3 13.5h4.5V21H3v-7.5zM9.75 9h4.5v12h-4.5V9zM16.5 3h4.5v18h-4.5V3z" />
+    </svg>
+  )
+}
+
 export function ShieldIcon() {
   return (
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
