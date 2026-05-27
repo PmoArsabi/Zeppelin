@@ -1,6 +1,6 @@
+import { lazy } from 'react'
 import type { ModuleDefinition } from '@/modules/types'
 import { ChartIcon } from '@/modules/icons'
-import KpiMiceModule from './KpiMiceModule'
 
 export const kpiMiceModule: ModuleDefinition = {
   id: 'kpi-mice',
@@ -8,5 +8,5 @@ export const kpiMiceModule: ModuleDefinition = {
   icon: <ChartIcon />,
   allowedRoles: ['admin', 'coordinador'],
   unidad: 'mice',
-  component: KpiMiceModule,
+  component: lazy(() => import('./KpiMiceModule')),
 }

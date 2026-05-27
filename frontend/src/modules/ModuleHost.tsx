@@ -1,5 +1,8 @@
+import { Suspense } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { canAccessModule, getModule, getNavItems, MODULES } from './registry'
+import AppShell from '@/components/layout/AppShell'
+import ModulePageSkeleton from '@/components/ui/ModulePageSkeleton'
 import type { ModuleHostProps } from './types'
 
 export default function ModuleHost({ activeModule, onNavigate, instanceKey = 0 }: ModuleHostProps) {
@@ -18,5 +21,15 @@ export default function ModuleHost({ activeModule, onNavigate, instanceKey = 0 }
   if (!mod) return null
 
   const Component = mod.component
-  return <Component key={`${mod.id}-${instanceKey}`} onNavigate={onNavigate} />
+  return (
+    <Suspense
+      fallback={
+        <AppShell activeModule={activeModule} onNavigate={onNavigate}>
+          <ModulePageSkeleton />
+        </AppShell>
+      }
+    >
+      <Component key={`${mod.id}-${instanceKey}`} onNavigate={onNavigate} />
+    </Suspense>
+  )
 }
