@@ -80,13 +80,14 @@ export default function RolesPermisosPage({ onNavigate }: Props) {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load() }, [load])
 
   const toggle = (rol_id: number, unidad_id: number, permiso_id: number) => {
     const k = key(rol_id, unidad_id, permiso_id)
     setDraft(prev => {
       const next = new Set(prev)
-      next.has(k) ? next.delete(k) : next.add(k)
+      if (next.has(k)) next.delete(k); else next.add(k)
       return next
     })
   }

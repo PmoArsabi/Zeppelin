@@ -219,8 +219,6 @@ async function fetchProfileNombreById(): Promise<Map<string, string>> {
 }
 
 export async function listSolicitudesMice(
-  _userId: string,
-  _isAdmin: boolean
 ): Promise<{ data: SolicitudMiceRow[] | null; error: string | null }> {
   const { data, error } = await supabase
     .from(TABLE)

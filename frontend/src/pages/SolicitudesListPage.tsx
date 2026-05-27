@@ -535,13 +535,13 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm overflow-x-auto">
 
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-[960px] text-[11px]">
+              <table className="w-full min-w-240 text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 text-left">
                     <th className={TH}>Estado</th>
                     <th className={TH}>Fecha</th>
                     <th className={TH}>Localizador</th>
-                    <th className={`${TH} min-w-[140px]`}>Cliente / Asesor</th>
+                    <th className={`${TH} min-w-35`}>Cliente / Asesor</th>
                     <th className={TH}>Tipo</th>
                     <th className={TH}>Servicios</th>
                     <th className={TH}>Modalidad</th>
@@ -573,7 +573,7 @@ export default function SolicitudesListPage({ onNew, onEdit, onView, onNavigate 
                           {s.localizador}
                         </span>
                       </td>
-                      <td className={`${TD} max-w-[160px]`}>
+                      <td className={`${TD} max-w-40`}>
                         <p
                           className="font-medium text-slate-800 dark:text-slate-100 truncate"
                           title={s.cliente}

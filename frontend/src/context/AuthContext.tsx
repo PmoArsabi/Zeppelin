@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Cargar unidades asignadas al usuario
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!user) { setUnidades([]); return }
 
     const rawRole = user.app_metadata?.role

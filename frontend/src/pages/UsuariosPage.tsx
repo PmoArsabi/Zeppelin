@@ -527,7 +527,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
 
             {/* Tabla desktop */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm min-w-175">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 bg-slate-50/60 dark:bg-gray-800/40">
                     {['Usuario', 'Correo', 'Rol', 'Unidad(es)', 'Estado', 'Fecha registro'].map((h, i) => (
@@ -553,7 +553,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
                           <p className="font-medium text-slate-800 dark:text-slate-200">{u.display_name}</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={u.email}>{u.email}</td>
+                      <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 max-w-45 truncate" title={u.email}>{u.email}</td>
                       <td className="px-4 py-3.5">{roleBadge(u.role)}</td>
                       <td className="px-4 py-3.5">{unidadesBadges(u.unidades)}</td>
                       <td className="px-4 py-3.5">{statusBadge(u.disabled)}</td>

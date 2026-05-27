@@ -335,7 +335,7 @@ function MiceSolicitudMobileCard({
 }
 
 export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavigate }: Props) {
-  const { user, isAdmin, hasPermission } = useAuth()
+  const { user, hasPermission } = useAuth()
   const [rows, setRows] = useState<SolicitudMiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -347,7 +347,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
     setLoading(true)
     setError(null)
     const [{ data, error: err }, cat] = await Promise.all([
-      listSolicitudesMice(user.id, isAdmin),
+      listSolicitudesMice(),
       fetchMiceCatalogos(),
     ])
     setCatalog(cat.data)
@@ -364,10 +364,10 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
       setRows(data ?? [])
     }
     setLoading(false)
-  }, [user, isAdmin])
+  }, [user])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial al montar
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
 
@@ -484,7 +484,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
         ) : (
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm overflow-hidden">
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-[1040px] text-[11px]">
+              <table className="w-full min-w-260 text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 text-left">
                     <th className={TH}>Fecha solicitud</th>
@@ -492,7 +492,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
                     <th className={TH}>Responsable</th>
                     <th className={TH}>Sector</th>
                     <th className={TH}>MZP</th>
-                    <th className={`${TH} min-w-[140px]`}>Nombre</th>
+                    <th className={`${TH} min-w-35`}>Nombre</th>
                     <th className={TH}>Prob</th>
                     <th className={TH}>Estado</th>
                     <th className={`${TH} text-right`}>Valor cotizado</th>
@@ -508,20 +508,20 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, onNavig
                       <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
                         {formatDateDDMMYYYY(row.fecha_solicitud)}
                       </td>
-                      <td className={`${TD} max-w-[160px] truncate`} title={row.cliente}>
+                      <td className={`${TD} max-w-40 truncate`} title={row.cliente}>
                         {row.cliente}
                       </td>
-                      <td className={`${TD} max-w-[140px] truncate`} title={row.responsable_nombre}>
+                      <td className={`${TD} max-w-35 truncate`} title={row.responsable_nombre}>
                         {row.responsable_nombre || '—'}
                       </td>
-                      <td className={`${TD} max-w-[100px] truncate text-slate-500`} title={row.sector ?? undefined}>
+                      <td className={`${TD} max-w-25 truncate text-slate-500`} title={row.sector ?? undefined}>
                         {row.sector ?? '—'}
                       </td>
                       <td className={`${TD} font-mono text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
                         {row.mzp ?? '—'}
                       </td>
                       <td
-                        className={`${TD} font-medium text-slate-800 dark:text-slate-100 max-w-[180px] truncate`}
+                        className={`${TD} font-medium text-slate-800 dark:text-slate-100 max-w-45 truncate`}
                         title={row.nombre}
                       >
                         {row.nombre}

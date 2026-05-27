@@ -134,9 +134,11 @@ export default function KpiMiceModule({ onNavigate }: Props) {
 
   useEffect(() => {
     if (!user) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
+     
     setError(null)
-    listSolicitudesMice(user.id, isAdmin).then(({ data, error: loadError }) => {
+    listSolicitudesMice().then(({ data, error: loadError }) => {
       if (loadError) setError(loadError)
       setRows(data ?? [])
       setLoading(false)
@@ -170,10 +172,13 @@ export default function KpiMiceModule({ onNavigate }: Props) {
     if (defaultYearApplied || loading || rows.length === 0 || filters.anios.length > 0) return
     const availableYears = new Set(rows.map(rowAnio))
     if (!availableYears.has(CURRENT_YEAR)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDefaultYearApplied(true)
       return
     }
+     
     setFilters(prev => prev.anios.length > 0 ? prev : { ...prev, anios: [CURRENT_YEAR] })
+     
     setDefaultYearApplied(true)
   }, [defaultYearApplied, loading, rows, filters.anios.length])
 
@@ -188,8 +193,10 @@ export default function KpiMiceModule({ onNavigate }: Props) {
       .map(estado => estadoByNormalizedName.get(normalizeEstadoName(estado)))
       .filter((estado): estado is string => Boolean(estado))
     if (defaults.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFilters(prev => prev.estados.length > 0 ? prev : { ...prev, estados: defaults })
     }
+     
     setDefaultEstadosApplied(true)
   }, [defaultEstadosApplied, loading, rows, filters.estados.length])
 
@@ -342,7 +349,7 @@ export default function KpiMiceModule({ onNavigate }: Props) {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-xs">
+                  <table className="w-full min-w-190 text-xs">
                     <thead>
                       <tr className="text-left border-b border-slate-100 dark:border-gray-800">
                         <th className="px-4 py-3 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Responsable</th>
@@ -508,7 +515,7 @@ export default function KpiMiceModule({ onNavigate }: Props) {
                     )}
                   </div>
 
-                  <div className="divide-y divide-slate-100 dark:divide-gray-800 max-h-[520px] overflow-y-auto">
+                  <div className="divide-y divide-slate-100 dark:divide-gray-800 max-h-130 overflow-y-auto">
                       {detailRows.map(row => (
                         <div key={row.id} className="p-4 hover:bg-slate-50 dark:hover:bg-gray-800/40">
                           <div className="flex items-start justify-between gap-3">

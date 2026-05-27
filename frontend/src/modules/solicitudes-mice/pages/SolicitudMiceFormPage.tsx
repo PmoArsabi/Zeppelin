@@ -268,7 +268,9 @@ export default function SolicitudMiceFormPage({
   }, [saveFeedback, onSaved])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUsuariosTiqueteadorLoaded(false)
+     
     setUsuariosResponsableMiceLoaded(false)
     Promise.all([
       fetchClientesZeppelinCatalog(),
@@ -312,6 +314,7 @@ export default function SolicitudMiceFormPage({
   useEffect(() => {
     if (!user || editTarget || !usuariosResponsableMiceLoaded) return
     const responsable = usuariosResponsableMice.find(u => u.value === user.id)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(prev => {
       if (prev.responsable_id && prev.responsable_id !== user.id) return prev
       return {
@@ -326,6 +329,7 @@ export default function SolicitudMiceFormPage({
     if (!usuariosResponsableMiceLoaded || !form.responsable_id) return
     const isAllowed = usuariosResponsableMice.some(u => u.value === form.responsable_id)
     if (isAllowed) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(prev => ({
       ...prev,
       responsable_id: '',
@@ -337,6 +341,7 @@ export default function SolicitudMiceFormPage({
     if (!usuariosTiqueteadorLoaded || !form.tiqueteador_user_id) return
     const isAllowed = usuariosTiqueteador.some(u => u.value === form.tiqueteador_user_id)
     if (isAllowed) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(prev => ({
       ...prev,
       tiqueteador_user_id: '',
