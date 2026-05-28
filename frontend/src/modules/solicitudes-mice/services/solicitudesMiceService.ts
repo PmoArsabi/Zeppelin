@@ -362,21 +362,14 @@ export async function fetchUsuariosResponsablesMice(): Promise<{
   data: { value: string; label: string }[]
   error: string | null
 }> {
-  const { data, error } = await supabase.rpc('list_users_with_roles')
+  const { data, error } = await supabase.rpc('list_responsables_mice')
 
   if (error) return { data: [], error: error.message }
 
-  const rolesResponsableMice = new Set(['coordinador', 'tiqueteador', 'asesor'])
-  const list = ((data ?? []) as UserWithRolesRow[])
-    .filter(row => Boolean(row.display_name?.trim()))
-    .filter(row => row.disabled !== true)
-    .filter(row => rolesResponsableMice.has(row.role?.trim().toLowerCase() ?? ''))
-    .filter(row => hasOnlyMiceUnidad(row.unidades))
-    .map(row => ({
-      value: row.id,
-      label: row.display_name!.trim(),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'es'))
+  const list = ((data ?? []) as { id: string; display_name: string }[]).map(row => ({
+    value: row.id,
+    label: row.display_name.trim(),
+  }))
 
   return { data: list, error: null }
 }

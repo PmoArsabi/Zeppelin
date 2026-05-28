@@ -9,7 +9,13 @@ import {
   type ServicioMiceCatalogo,
 } from '../types/mice-catalogos'
 
-const FALLBACK_ANIOS = [2026, 2025]
+function generateAnios(): number[] {
+  const current = new Date().getFullYear()
+  const result: number[] = []
+  for (let y = current - 1; y <= current + 5; y++) result.push(y)
+  return result
+}
+const ANIOS_DINAMICOS = generateAnios()
 const FALLBACK_MONEDAS = [
   { codigo: 'COP', nombre: 'Peso colombiano' },
   { codigo: 'USD', nombre: 'Dólar estadounidense' },
@@ -163,7 +169,6 @@ export async function fetchMiceCatalogos(): Promise<{
   usedFallback: boolean
 }> {
   const [
-    aniosRes,
     monedasRes,
     estadosRes,
     probRes,
@@ -173,7 +178,6 @@ export async function fetchMiceCatalogos(): Promise<{
     ciudadesRes,
     sectoresRes,
   ] = await Promise.all([
-    supabase.from('td_anios_mice').select('anio').eq('activo', true).order('anio', { ascending: false }),
     supabase.from('td_monedas').select('codigo, nombre').eq('activo', true).order('codigo'),
     supabase.from('td_estados').select('id, codigo, nombre').eq('activo', true).order('orden'),
     supabase.from('td_probabilidades').select('id, codigo, nombre').eq('activo', true).order('orden'),
@@ -185,7 +189,6 @@ export async function fetchMiceCatalogos(): Promise<{
   ])
 
   const errors = [
-    aniosRes.error,
     monedasRes.error,
     estadosRes.error,
     probRes.error,
@@ -197,7 +200,6 @@ export async function fetchMiceCatalogos(): Promise<{
   ].filter(Boolean)
 
   const dbOk =
-    (aniosRes.data?.length ?? 0) > 0 &&
     (serviciosRes.data?.length ?? 0) > 0 &&
     (paisesRes.data?.length ?? 0) > 0
 
@@ -210,7 +212,7 @@ export async function fetchMiceCatalogos(): Promise<{
     return {
       data: {
         ...MICE_CATALOGOS_VACIOS,
-        anios: FALLBACK_ANIOS,
+        anios: ANIOS_DINAMICOS,
         monedas: FALLBACK_MONEDAS,
         estados: FALLBACK_ESTADOS,
         probabilidades: FALLBACK_PROBABILIDADES,
@@ -264,7 +266,7 @@ export async function fetchMiceCatalogos(): Promise<{
 
   return {
     data: {
-      anios: (aniosRes.data ?? []).map(r => (r as { anio: number }).anio),
+      anios: ANIOS_DINAMICOS,
       monedas: (monedasRes.data ?? []).map(r => {
         const m = r as { codigo: string; nombre: string }
         return { codigo: m.codigo, nombre: m.nombre }

@@ -1,4 +1,4 @@
-export const ANIO_MICE_DEFAULT = 2026
+export const ANIO_MICE_DEFAULT = new Date().getFullYear()
 
 export type EstadoMice = string
 export type ProbabilidadMice = string
