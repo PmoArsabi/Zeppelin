@@ -4,11 +4,13 @@ import { solicitudesCorporativosModule } from './solicitudes-corporativos'
 import { solicitudesMiceModule } from './solicitudes-mice'
 import { usuariosModule } from './usuarios'
 import { rolesPermisosModule } from './roles-permisos'
+import { cargaSiigoModule } from './carga-siigo'
 
 /** Registro de módulos — agregar aquí cada módulo nuevo */
 export const MODULES: ModuleDefinition[] = [
   solicitudesCorporativosModule,
   solicitudesMiceModule,
+  cargaSiigoModule,
   usuariosModule,
   rolesPermisosModule,
 ]
