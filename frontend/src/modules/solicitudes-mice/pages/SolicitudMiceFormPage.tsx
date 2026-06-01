@@ -9,7 +9,8 @@ import {
   puedeAvanzar,
   type EtapaMice,
 } from '../lib/etapasMice'
-import { fetchClientesZeppelinCatalog, clientesToIdOptions, buildClienteNombreById } from '@/lib/clientes'
+import { buildClienteNombreById, fetchClientesZeppelinCatalog } from '@/lib/clientes'
+import ClienteSearchSelect from '@/components/ui/ClienteSearchSelect'
 import { parseDecimalCO } from '@/lib/decimalFormat'
 import { useAuth } from '@/context/AuthContext'
 import { Card } from '@/components/ui/Card'
@@ -197,7 +198,6 @@ export default function SolicitudMiceFormPage({
   const [errors, setErrors] = useState<Errors>({})
   const [saveFeedback, setSaveFeedback] = useState<SaveFeedbackState | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [clientes, setClientes] = useState<{ value: string; label: string }[]>([])
   const [clientesCatalog, setClientesCatalog] = useState<{ id: number; fullname: string }[]>([])
   const [clientesError, setClientesError] = useState<string | null>(null)
   const [sectores, setSectores] = useState<string[]>([])
@@ -297,7 +297,6 @@ export default function SolicitudMiceFormPage({
     ]).then(([clientesRes, sectoresList, usuariosRes, responsablesRes, miceCat]) => {
       if (clientesRes.error) setClientesError(clientesRes.error)
       setClientesCatalog(clientesRes.data)
-      setClientes(clientesToIdOptions(clientesRes.data))
       setSectores(sectoresList)
       if (usuariosRes.error) setUsuariosTiqueteadorError(usuariosRes.error)
       setUsuariosTiqueteador(usuariosRes.data)
@@ -488,15 +487,7 @@ export default function SolicitudMiceFormPage({
     return base
   }, [catalog.sectores, form.sector_id, form.sector])
 
-  const clienteOptions = useMemo(() => {
-    const base = clientesToIdOptions(clientesCatalog)
-    if (form.cliente_id != null && !base.some(o => o.value === String(form.cliente_id))) {
-      return [{ value: String(form.cliente_id), label: form.cliente || 'Cliente anterior' }, ...base]
-    }
-    return base.length > 0 ? base : clientes
-  }, [clientesCatalog, clientes, form.cliente_id, form.cliente])
-
-  const estadoOptions = useMemo(() => {
+const estadoOptions = useMemo(() => {
     const base = catalog.estados.map(s => ({ value: String(s.id), label: s.nombre }))
     if (form.estado_id != null && !base.some(o => o.value === String(form.estado_id))) {
       return [{ value: String(form.estado_id), label: form.estado || 'Estado anterior' }, ...base]
@@ -736,23 +727,14 @@ export default function SolicitudMiceFormPage({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <FormField label="Cliente" required htmlFor="cliente_id" error={errors.cliente_id}
                   className="sm:col-span-2 lg:col-span-2 min-w-0">
-                  <CustomSelect
-                    id="cliente_id"
-                    value={form.cliente_id != null ? String(form.cliente_id) : ''}
-                    onChange={v => {
-                      const id = v ? Number(v) : null
-                      const item = clientesCatalog.find(c => c.id === id)
-                      setForm(prev => ({
-                        ...prev,
-                        cliente_id: id,
-                        cliente: item?.fullname ?? prev.cliente,
-                      }))
+                  <ClienteSearchSelect
+                    value={form.cliente_id}
+                    onChange={(id, fullname) => {
+                      setForm(prev => ({ ...prev, cliente_id: id, cliente: fullname }))
+                      if (errors.cliente_id) setErrors(prev => ({ ...prev, cliente_id: undefined }))
                     }}
-                    placeholder={catalogLoading ? 'Cargando...' : 'Seleccionar cliente...'}
                     error={!!errors.cliente_id}
-                    disabled={effectiveLock || lockRegistro || catalogLoading || !!clientesError}
-                    searchable
-                    options={clienteOptions}
+                    disabled={effectiveLock || lockRegistro}
                   />
                 </FormField>
                 <FormField label="Sector" htmlFor="sector" required error={errors.sector} className="lg:col-span-1 min-w-0">
