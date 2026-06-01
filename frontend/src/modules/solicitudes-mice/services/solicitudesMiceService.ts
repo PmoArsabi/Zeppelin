@@ -134,6 +134,8 @@ export function formToPayload(
     fecha_solicitud: form.fecha_solicitud,
     fecha_entrega: emptyToNull(form.fecha_entrega),
     pax: form.pax.trim() ? parseInt(form.pax, 10) : null,
+    valor_final_aprobado: parseNum(form.valor_final_aprobado),
+    utilidad_real: parseNum(form.utilidad_real),
   }
 }
 
@@ -205,6 +207,8 @@ export function rowToForm(
     tiqueteador_asignado: enriched.tiqueteador_asignado ?? '',
     probabilidad_id: enriched.probabilidad_id ?? null,
     probabilidad: enriched.probabilidad ?? '',
+    valor_final_aprobado: enriched.valor_final_aprobado != null ? formatDecimalCO(enriched.valor_final_aprobado) : '',
+    utilidad_real: enriched.utilidad_real != null ? formatDecimalCO(enriched.utilidad_real) : '',
   }
 }
 

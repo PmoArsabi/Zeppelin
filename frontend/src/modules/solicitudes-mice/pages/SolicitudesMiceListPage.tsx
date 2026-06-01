@@ -404,6 +404,7 @@ function FilterBar({
       total={total}
       filtered={filtered}
       storageKey="zeppelin.filters.mice.expanded"
+      defaultExpanded={false}
       forceExpandTrigger={forceExpandTrigger}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
@@ -620,7 +621,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
   const [catalog, setCatalog] = useState<MiceCatalogos>(MICE_CATALOGOS_VACIOS)
   const [matrixExpanded, setMatrixExpanded] = useState(() => {
     const s = localStorage.getItem('zeppelin.mice.matrix.expanded')
-    return s === null ? true : s === 'true'
+    return s === null ? false : s === 'true'
   })
 
   const load = useCallback(async () => {

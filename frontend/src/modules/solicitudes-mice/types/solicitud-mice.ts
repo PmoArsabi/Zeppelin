@@ -42,6 +42,9 @@ export interface SolicitudMiceForm {
   /** Nombre visible; fuente de verdad: probabilidad_id */
   probabilidad: ProbabilidadMice | ''
   probabilidad_id: number | null
+  /** Etapa En operación */
+  valor_final_aprobado: string
+  utilidad_real: string
 }
 
 export const INITIAL_FORM_MICE = (): SolicitudMiceForm => ({
@@ -71,6 +74,8 @@ export const INITIAL_FORM_MICE = (): SolicitudMiceForm => ({
   tiqueteador_asignado: '',
   probabilidad: '',
   probabilidad_id: null,
+  valor_final_aprobado: '',
+  utilidad_real: '',
 })
 
 /** Columnas reales en th_solicitud_mice (post-limpieza) */
@@ -94,6 +99,8 @@ export interface SolicitudMiceRowDb {
   pax: number | null
   tiqueteador_user_id: string | null
   probabilidad_id: number | null
+  valor_final_aprobado: number | null
+  utilidad_real: number | null
   activo: boolean
   created_at: string
   updated_at: string
