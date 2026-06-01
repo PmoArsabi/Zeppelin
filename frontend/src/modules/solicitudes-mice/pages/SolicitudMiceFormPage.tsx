@@ -54,7 +54,13 @@ function cloneFormMice(f: SolicitudMiceForm): SolicitudMiceForm {
 
 type Errors = Partial<Record<keyof SolicitudMiceForm, string>>
 
-function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaMice | null): Errors {
+function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaMice | null, isEdit: boolean): Errors {
+  const ETAPAS_CON_COTIZACION = ['cotizacion_enviada','seguimiento','en_operacion','en_cierre','cerrado','no_adjudicado','cancelado']
+  const ETAPAS_CON_OPERACION  = ['en_operacion','en_cierre','cerrado']
+  const ETAPAS_CON_CIERRE     = ['en_cierre','cerrado']
+  const seccionCotizacion = isEdit ? mostrarSeccionCotizacion(etapa) : ETAPAS_CON_COTIZACION.includes(etapa ?? '')
+  const seccionOperacion  = isEdit ? mostrarSeccionOperacion(etapa)  : ETAPAS_CON_OPERACION.includes(etapa ?? '')
+  const seccionCierre     = isEdit ? mostrarSeccionCierre(etapa)     : ETAPAS_CON_CIERRE.includes(etapa ?? '')
   const e: Errors = {}
   if (!catalog.anios.includes(form.anio)) e.anio = 'Seleccione un año válido.'
   if (!form.responsable_id.trim()) e.responsable_id = 'Seleccione un responsable.'
@@ -69,8 +75,7 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
   if (form.inicio && form.fin && form.fin < form.inicio) {
     e.fin = 'Debe ser igual o posterior a la fecha de inicio.'
   }
-  // Fechas inicio y fin obligatorias desde en_operacion
-  if (mostrarSeccionOperacion(etapa) && etapa !== null) {
+  if (seccionOperacion) {
     if (!form.inicio) e.inicio = 'La fecha de inicio es obligatoria en esta etapa.'
     if (!form.fin) e.fin = 'La fecha de fin es obligatoria en esta etapa.'
   }
@@ -89,8 +94,7 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
     e.tiqueteador_user_id = 'Seleccione un tiqueteador (hay tiquetes en los servicios).'
   }
 
-  // Campos obligatorios desde cotizacion_enviada en adelante
-  if (mostrarSeccionCotizacion(etapa)) {
+  if (seccionCotizacion) {
     if (!form.valor_cotizado.trim()) e.valor_cotizado = 'Ingrese el valor cotizado.'
     else if (parseDecimalCO(form.valor_cotizado) == null) e.valor_cotizado = 'Valor cotizado inválido.'
     if (!form.utilidad_proyectada.trim()) e.utilidad_proyectada = 'Ingrese la utilidad proyectada.'
@@ -110,16 +114,11 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
     }
   }
 
-  // Documentos obligatorios para cerrar (al menos una factura y un recibo)
-  if (etapa && mostrarSeccionCierre(etapa) && siguienteEtapa(etapa) === 'cerrado') {
-    const tieneFactura = form.documentos.some(d => d.tipo === 'factura')
-    const tieneRecibo = form.documentos.some(d => d.tipo === 'recibo_caja')
-    if (!tieneFactura) e.documentos = 'Agregue al menos una factura para cerrar.'
-    else if (!tieneRecibo) e.documentos = 'Agregue al menos un recibo de caja para cerrar.'
+  if (seccionCierre && form.documentos.length === 0) {
+    e.documentos = 'Agregue al menos un documento (factura o recibo de caja).'
   }
 
-  // Campos obligatorios en en_operacion
-  if (mostrarSeccionOperacion(etapa)) {
+  if (seccionOperacion) {
     if (!form.valor_final_aprobado.trim()) e.valor_final_aprobado = 'Ingrese el valor final aprobado.'
     else if (parseDecimalCO(form.valor_final_aprobado) == null) e.valor_final_aprobado = 'Valor inválido.'
     if (!form.utilidad_real.trim()) e.utilidad_real = 'Ingrese la utilidad real.'
@@ -271,9 +270,12 @@ export default function SolicitudMiceFormPage({
       const urOk = !!form.utilidad_real.trim() && parseDecimalCO(form.utilidad_real) != null
       return vfOk && urOk
     }
-    // Para otros avances (seguimiento → en_operacion, en_operacion → en_cierre, etc.) no hay campos extra
+    // Para avanzar a en_cierre o cerrado: al menos un documento
+    if (siguiente === 'en_cierre' || siguiente === 'cerrado') {
+      return form.documentos.length > 0
+    }
     return true
-  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real])
+  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real, form.documentos])
 
   useEffect(() => {
     if (saveFeedback?.status !== 'success') return
@@ -526,7 +528,7 @@ export default function SolicitudMiceFormPage({
     e.preventDefault()
     if (effectiveLock || formBusy) return
     setSubmitError(null)
-    const v = validate(form, catalog, etapaActual)
+    const v = validate(form, catalog, etapaActual, isEdit)
     if (Object.keys(v).length > 0) {
       setErrors(v)
       setActiveTab('cotizacion')
@@ -607,7 +609,9 @@ export default function SolicitudMiceFormPage({
         : {}),
     }
 
-    const v = validate(formAvanzado, catalog, siguiente)
+    // Al avanzar etapa se valida contra la etapa destino SIN pre-carga (isEdit=false)
+    // para que solo sean obligatorios los campos que esa etapa realmente requiere
+    const v = validate(formAvanzado, catalog, siguiente, false)
     if (Object.keys(v).length > 0) {
       setErrors(v)
       setActiveTab('cotizacion')
@@ -956,7 +960,7 @@ export default function SolicitudMiceFormPage({
               </div>
           </FormSection>
 
-          {isEdit && (
+          {(isEdit ? mostrarSeccionCotizacion(etapaActual) : ['cotizacion_enviada','seguimiento','en_operacion','en_cierre','cerrado','no_adjudicado','cancelado'].includes(etapaActual ?? '')) && (
           <FormSection
             step={3}
             title="Cotización"
@@ -1039,7 +1043,7 @@ export default function SolicitudMiceFormPage({
           </FormSection>
           )}
 
-          {mostrarSeccionOperacion(etapaActual) && (
+          {(isEdit ? mostrarSeccionOperacion(etapaActual) : ['en_operacion','en_cierre','cerrado'].includes(etapaActual ?? '')) && (
           <FormSection
             step={4}
             title="En operación"
@@ -1111,7 +1115,7 @@ export default function SolicitudMiceFormPage({
           </FormSection>
           )}
 
-          {mostrarSeccionCierre(etapaActual) && (
+          {(isEdit ? mostrarSeccionCierre(etapaActual) : ['en_cierre','cerrado'].includes(etapaActual ?? '')) && (
           <FormSection
             step={5}
             title="Cierre"
@@ -1126,7 +1130,6 @@ export default function SolicitudMiceFormPage({
                 value={form.documentos}
                 onChange={docs => set('documentos', docs)}
                 readOnly={effectiveLock}
-                error={errors.documentos}
               />
             </FormField>
           </FormSection>
