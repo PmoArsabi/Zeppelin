@@ -16,7 +16,7 @@ import {
   type SolicitudMiceRelaciones,
 } from './miceRelacionesService'
 import { addSeguimientoMice } from './seguimientoMiceService'
-import { buildAuditoriaMiceObservacion } from '@/lib/auditoria/camposMice'
+import { buildAuditoriaMiceCreacion, buildAuditoriaMiceObservacion } from '@/lib/auditoria/camposMice'
 import { registrarAuditoriaEdicion } from '@/lib/auditoria/logAuditoriaService'
 import { fetchMiceCatalogos } from './miceCatalogosService'
 import { resolveNextMzpCode } from './mzpConsecutivoService'
@@ -332,6 +332,12 @@ export async function saveSolicitudMice(
   if (segText) {
     const seg = await addSeguimientoMice(newId, userId, autorNombre, segText)
     if (seg.error) return { error: seg.error, id: newId }
+  }
+
+  // Registrar auditoría de creación con todos los campos iniciales
+  const observacionCreacion = buildAuditoriaMiceCreacion(form, catalog)
+  if (observacionCreacion) {
+    await registrarAuditoriaEdicion('solicitudes-mice', newId, userId, autorNombre, observacionCreacion)
   }
 
   return { error: null, id: newId }

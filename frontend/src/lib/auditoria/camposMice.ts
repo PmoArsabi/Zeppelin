@@ -1,4 +1,5 @@
 import { formatDecimalCO } from '@/lib/decimalFormat'
+import { INITIAL_FORM_MICE } from '@/modules/solicitudes-mice/types'
 import type { DestinoMice, SolicitudMiceForm } from '@/modules/solicitudes-mice/types'
 import type { MiceCatalogos } from '@/modules/solicitudes-mice/types/mice-catalogos'
 import {
@@ -24,6 +25,13 @@ function dineroTexto(valor: string, moneda: string): string {
   const t = valor.trim()
   if (!t) return VACIO_AUDITORIA
   return `${moneda} ${formatDecimalCO(valor)}`
+}
+
+export function buildAuditoriaMiceCreacion(
+  form: SolicitudMiceForm,
+  catalog: MiceCatalogos
+): string | null {
+  return buildAuditoriaMiceObservacion(INITIAL_FORM_MICE(), form, catalog)
 }
 
 export function buildAuditoriaMiceObservacion(
