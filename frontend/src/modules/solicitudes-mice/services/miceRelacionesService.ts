@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { DestinoMice, SolicitudMiceForm } from '../types'
+import type { DestinoMice, DocumentoMice, SolicitudMiceForm } from '../types'
 import type { MiceCatalogos } from '../types/mice-catalogos'
 import { destinosToDbColumns } from '../lib/destinosMice'
 import { lugaresToDb } from '../lib/lugaresMice'
@@ -9,6 +9,7 @@ export interface SolicitudMiceRelaciones {
   servicios: string[]
   destinos: DestinoMice[]
   lugares: string[]
+  documentos: DocumentoMice[]
 }
 
 function resolveDestinoIds(
@@ -31,7 +32,7 @@ function resolveDestinoIds(
 export async function fetchSolicitudRelaciones(
   solicitudId: string
 ): Promise<{ data: SolicitudMiceRelaciones; error: string | null }> {
-  const [servRes, destRes, lugRes] = await Promise.all([
+  const [servRes, destRes, lugRes, docRes] = await Promise.all([
     supabase
       .from('th_solicitud_mice_servicios')
       .select('servicio_id, orden')
@@ -46,12 +47,17 @@ export async function fetchSolicitudRelaciones(
       .from('th_solicitud_mice_lugares')
       .select('td_lugares(nombre, orden)')
       .eq('solicitud_id', solicitudId),
+    supabase
+      .from('th_solicitud_mice_documentos')
+      .select('tipo, numero')
+      .eq('solicitud_id', solicitudId)
+      .order('created_at'),
   ])
 
-  const err = servRes.error ?? destRes.error ?? lugRes.error
+  const err = servRes.error ?? destRes.error ?? lugRes.error ?? docRes.error
   if (err) {
     return {
-      data: { servicios: [], destinos: [], lugares: [] },
+      data: { servicios: [], destinos: [], lugares: [], documentos: [] },
       error: err.message,
     }
   }
@@ -86,7 +92,12 @@ export async function fetchSolicitudRelaciones(
     .sort((a, b) => a.orden - b.orden)
     .map(l => l.nombre)
 
-  return { data: { servicios, destinos, lugares }, error: null }
+  const documentos: DocumentoMice[] = (docRes.data ?? []).map(r => {
+    const d = r as { tipo: DocumentoMice['tipo']; numero: string }
+    return { tipo: d.tipo, numero: d.numero }
+  })
+
+  return { data: { servicios, destinos, lugares, documentos }, error: null }
 }
 
 async function deleteRelaciones(solicitudId: string): Promise<string | null> {
@@ -94,6 +105,7 @@ async function deleteRelaciones(solicitudId: string): Promise<string | null> {
     'th_solicitud_mice_servicios',
     'th_solicitud_mice_destinos',
     'th_solicitud_mice_lugares',
+    'th_solicitud_mice_documentos',
   ] as const
 
   for (const table of tables) {
@@ -153,6 +165,16 @@ export async function syncSolicitudRelaciones(
       const { error } = await supabase.from('th_solicitud_mice_lugares').insert(rows)
       if (error) return { error: error.message }
     }
+  }
+
+  if (form.documentos.length > 0) {
+    const rows = form.documentos.map(d => ({
+      solicitud_id: solicitudId,
+      tipo: d.tipo,
+      numero: d.numero.toUpperCase().trim(),
+    }))
+    const { error } = await supabase.from('th_solicitud_mice_documentos').insert(rows)
+    if (error) return { error: error.message }
   }
 
   return { error: null }

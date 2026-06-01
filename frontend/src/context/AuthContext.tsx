@@ -29,6 +29,8 @@ interface AuthContextValue {
   unidades: UnidadSlug[]
   permissions: Permissions
   isAdmin: boolean
+  /** Nombre para mostrar del usuario logueado (de td_profiles). Fallback: email. */
+  displayName: string
   hasPermission: (unidad: UnidadSlug, permiso: string) => boolean
   signOut: () => Promise<void>
 }
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [unidades, setUnidades] = useState<UnidadSlug[]>([])
+  const [displayName, setDisplayName] = useState('')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -55,6 +58,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  // Cargar display_name desde td_profiles
+  useEffect(() => {
+    if (!user) { setDisplayName(''); return }
+    supabase
+      .from('td_profiles')
+      .select('display_name')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        setDisplayName(data?.display_name?.trim() || user.email || '')
+      })
+  }, [user])
 
   // Cargar unidades asignadas al usuario
   useEffect(() => {
@@ -103,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, loading, role, unidades, permissions,
-      isAdmin: permissions.isAdmin, hasPermission, signOut,
+      isAdmin: permissions.isAdmin, displayName, hasPermission, signOut,
     }}>
       {children}
     </AuthContext.Provider>

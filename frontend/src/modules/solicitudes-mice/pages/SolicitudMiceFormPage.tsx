@@ -5,6 +5,7 @@ import {
   labelEtapa,
   mostrarSeccionCotizacion,
   mostrarSeccionOperacion,
+  mostrarSeccionCierre,
   puedeAvanzar,
   type EtapaMice,
 } from '../lib/etapasMice'
@@ -18,7 +19,6 @@ import Input from '@/components/ui/Input'
 import DecimalInput from '@/components/ui/DecimalInput'
 import YearInput from '@/components/ui/YearInput'
 import CustomSelect from '@/components/ui/CustomSelect'
-import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
 import SaveFeedbackOverlay, { type SaveFeedbackState } from '@/components/ui/SaveFeedbackOverlay'
@@ -42,6 +42,7 @@ import {
 import { resolveNextMzpCode } from '../services/mzpConsecutivoService'
 import { fetchMiceCatalogos } from '../services/miceCatalogosService'
 import DestinosMiceEditor from '../components/DestinosMiceEditor'
+import DocumentosMiceEditor from '../components/DocumentosMiceEditor'
 import LugarMiceSelect from '../components/LugarMiceSelect'
 import ServiciosMiceSelect from '../components/ServiciosMiceSelect'
 import SeguimientoMiceChat from '../components/SeguimientoMiceChat'
@@ -68,6 +69,11 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
   if (form.inicio && form.fin && form.fin < form.inicio) {
     e.fin = 'Debe ser igual o posterior a la fecha de inicio.'
   }
+  // Fechas inicio y fin obligatorias desde en_operacion
+  if (mostrarSeccionOperacion(etapa) && etapa !== null) {
+    if (!form.inicio) e.inicio = 'La fecha de inicio es obligatoria en esta etapa.'
+    if (!form.fin) e.fin = 'La fecha de fin es obligatoria en esta etapa.'
+  }
   if (form.pax.trim()) {
     const p = parseInt(form.pax, 10)
     if (!Number.isFinite(p) || p < 0) e.pax = 'PAX debe ser un número válido.'
@@ -89,8 +95,7 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
     else if (parseDecimalCO(form.valor_cotizado) == null) e.valor_cotizado = 'Valor cotizado inválido.'
     if (!form.utilidad_proyectada.trim()) e.utilidad_proyectada = 'Ingrese la utilidad proyectada.'
     else if (parseDecimalCO(form.utilidad_proyectada) == null) e.utilidad_proyectada = 'Utilidad proyectada inválida.'
-    if (!form.fecha_entrega) e.fecha_entrega = 'La fecha de entrega es obligatoria.'
-    else if (form.fecha_solicitud && form.fecha_entrega < form.fecha_solicitud) {
+    if (form.fecha_entrega && form.fecha_solicitud && form.fecha_entrega < form.fecha_solicitud) {
       e.fecha_entrega = 'Debe ser igual o posterior a la fecha de solicitud.'
     }
     if (form.probabilidad_id == null && !form.probabilidad.trim()) e.probabilidad = 'Seleccione una probabilidad.'
@@ -103,6 +108,14 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
     if (form.fecha_entrega && form.fecha_solicitud && form.fecha_entrega < form.fecha_solicitud) {
       e.fecha_entrega = 'Debe ser igual o posterior a la fecha de solicitud.'
     }
+  }
+
+  // Documentos obligatorios para cerrar (al menos una factura y un recibo)
+  if (etapa && mostrarSeccionCierre(etapa) && siguienteEtapa(etapa) === 'cerrado') {
+    const tieneFactura = form.documentos.some(d => d.tipo === 'factura')
+    const tieneRecibo = form.documentos.some(d => d.tipo === 'recibo_caja')
+    if (!tieneFactura) e.documentos = 'Agregue al menos una factura para cerrar.'
+    else if (!tieneRecibo) e.documentos = 'Agregue al menos un recibo de caja para cerrar.'
   }
 
   // Campos obligatorios en en_operacion
@@ -123,45 +136,6 @@ const FORM_TABS: { id: FormTabId; label: string }[] = [
   { id: 'seguimiento', label: 'Seguimiento' },
   { id: 'historial', label: 'Historial de cambios' },
 ]
-
-function FormTabs({
-  active,
-  onChange,
-  disabled = false,
-}: {
-  active: FormTabId
-  onChange: (id: FormTabId) => void
-  disabled?: boolean
-}) {
-  return (
-    <div
-      className="flex flex-wrap gap-1 px-4 sm:px-6 pt-4 pb-0 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30"
-      role="tablist"
-      aria-label="Secciones de la solicitud"
-    >
-      {FORM_TABS.map(tab => {
-        const selected = active === tab.id
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            disabled={disabled}
-            onClick={() => onChange(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              selected
-                ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-300 bg-white dark:bg-slate-900'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-900/40'
-            }`}
-          >
-            {tab.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 function FormSection({
   step,
@@ -213,7 +187,7 @@ export default function SolicitudMiceFormPage({
   onSaved,
   onCancel,
 }: Props) {
-  const { user } = useAuth()
+  const { user, displayName: currentUserName } = useAuth()
   const isEdit = editTarget !== null
   const lock = readOnly
   const mzpAuto = !isEdit && !lock
@@ -249,14 +223,27 @@ export default function SolicitudMiceFormPage({
   /** Edición: esperar catálogo + relaciones (servicios, destinos…) sin banner parpadeante */
   const formHydrating = isEdit && (catalogLoading || editLoading)
 
-  /** Etapa derivada del estado actual del form */
+  /**
+   * Etapa derivada del estado actual.
+   * Prioriza el catálogo cargado; si aún no cargó y hay un editTarget,
+   * intenta derivar la etapa desde el nombre del estado (fallback seguro).
+   */
   const etapaActual = useMemo<EtapaMice | null>(() => {
-    const estado = catalog.estados.find(e => e.id === form.estado_id)
-    return estado ? codigoToEtapa(estado.codigo) : null
-  }, [catalog.estados, form.estado_id])
+    // Fuente principal: estado resuelto via catálogo
+    if (form.estado_id != null) {
+      const estado = catalog.estados.find(e => e.id === form.estado_id)
+      if (estado) return codigoToEtapa(estado.codigo)
+    }
+    // Fallback: intentar derivar desde el nombre de estado en el form
+    // (útil mientras el catálogo carga en modo edición)
+    if (form.estado) return codigoToEtapa(form.estado.toLowerCase().replace(/ /g, '_'))
+    return null
+  }, [catalog.estados, form.estado_id, form.estado])
 
   const tieneTiquetes = form.servicios.includes('SRV-01')
   const effectiveLock = lock
+  /** En operación y posterior: valor cotizado, utilidad proyectada y fecha entrega son de solo lectura */
+  const lockCotizacionFields = isEdit && ['en_operacion', 'en_cierre', 'cerrado'].includes(etapaActual ?? '')
 
   // Limpiar tiqueteador si se quita SRV-01 de los servicios
   useEffect(() => {
@@ -265,6 +252,28 @@ export default function SolicitudMiceFormPage({
       setForm(prev => ({ ...prev, tiqueteador_user_id: '', tiqueteador_asignado: '' }))
     }
   }, [tieneTiquetes, form.tiqueteador_user_id])
+
+  /** Verifica si los campos requeridos para avanzar a la etapa siguiente están completos. */
+  const puedeAvanzarAhora = useMemo(() => {
+    if (!etapaActual) return false
+    const siguiente = siguienteEtapa(etapaActual)
+    if (!siguiente) return false
+    // Para avanzar a cotizacion_enviada: valor, utilidad y probabilidad obligatorios
+    if (siguiente === 'cotizacion_enviada') {
+      const valorOk = !!form.valor_cotizado.trim() && parseDecimalCO(form.valor_cotizado) != null
+      const utilidadOk = !!form.utilidad_proyectada.trim() && parseDecimalCO(form.utilidad_proyectada) != null
+      const probOk = form.probabilidad_id != null || !!form.probabilidad.trim()
+      return valorOk && utilidadOk && probOk
+    }
+    // Para avanzar a en_operacion: campos de operación obligatorios
+    if (siguiente === 'en_operacion') {
+      const vfOk = !!form.valor_final_aprobado.trim() && parseDecimalCO(form.valor_final_aprobado) != null
+      const urOk = !!form.utilidad_real.trim() && parseDecimalCO(form.utilidad_real) != null
+      return vfOk && urOk
+    }
+    // Para otros avances (seguimiento → en_operacion, en_operacion → en_cierre, etc.) no hay campos extra
+    return true
+  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real])
 
   useEffect(() => {
     if (saveFeedback?.status !== 'success') return
@@ -428,11 +437,6 @@ export default function SolicitudMiceFormPage({
     setErrors(prev => ({ ...prev, fecha_entrega: msg }))
   }
 
-  const setFechaEntrega = (fecha: string) => {
-    set('fecha_entrega', fecha)
-    const msg = fechaEntregaError(fecha, form.fecha_solicitud)
-    setErrors(prev => ({ ...prev, fecha_entrega: msg }))
-  }
 
   const fechaFinError = (fin: string, inicio: string): string | undefined => {
     if (fin && inicio && fin < inicio) {
@@ -557,6 +561,7 @@ export default function SolicitudMiceFormPage({
       const { error, id: savedId, auditWarning } = await saveSolicitudMice(
         formWithResponsable,
         user.id,
+        currentUserName || user.email || 'Usuario',
         catalog,
         isEdit ? editTarget!.id : undefined,
         !isEdit ? pendingSeguimiento : undefined,
@@ -596,6 +601,10 @@ export default function SolicitudMiceFormPage({
       ...form,
       estado_id: estadoSiguiente.id,
       estado: estadoSiguiente.nombre,
+      // Fecha de entrega automática al pasar a cotización enviada
+      ...(siguiente === 'cotizacion_enviada' && !form.fecha_entrega
+        ? { fecha_entrega: new Date().toISOString().slice(0, 10) }
+        : {}),
     }
 
     const v = validate(formAvanzado, catalog, siguiente)
@@ -613,6 +622,7 @@ export default function SolicitudMiceFormPage({
       const { error, auditWarning } = await saveSolicitudMice(
         formAvanzado,
         user.id,
+        currentUserName || user.email || 'Usuario',
         catalog,
         solicitudId,
         undefined,
@@ -674,7 +684,42 @@ export default function SolicitudMiceFormPage({
             }`}
             aria-busy={formBusy || formHydrating}
           >
-            <FormTabs active={activeTab} onChange={setActiveTab} disabled={formBusy} />
+            <div className="flex items-end justify-between px-4 sm:px-6 pt-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+              <div className="flex flex-wrap gap-1" role="tablist" aria-label="Secciones de la solicitud">
+                {FORM_TABS.map(tab => {
+                  const selected = activeTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      disabled={formBusy}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        selected
+                          ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-300 bg-white dark:bg-slate-900'
+                          : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-900/40'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </div>
+              {(isEdit || form.mzp) && (
+                <div className="flex items-center pb-px pl-4 shrink-0 self-center">
+                  <span
+                    className={`font-mono text-base font-bold tracking-widest text-indigo-600 dark:text-indigo-400 ${mzpLoading && mzpAuto ? 'opacity-40' : ''}`}
+                    aria-label="Código MZP"
+                    aria-live="polite"
+                  >
+                    {mzpLoading && mzpAuto ? '…' : form.mzp || '—'}
+                  </span>
+                  {errors.mzp && <p className="text-[10px] text-rose-500 dark:text-rose-400 mt-0.5 text-right">{errors.mzp}</p>}
+                </div>
+              )}
+            </div>
 
             {activeTab === 'cotizacion' && (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -683,22 +728,6 @@ export default function SolicitudMiceFormPage({
             step={1}
             title="Información General"
             description="Cliente, responsable, fechas de gestión y datos del evento"
-            headerAside={
-              <div className="shrink-0 pl-4 border-l border-slate-200 dark:border-slate-700 text-right">
-                <p
-                  className={`font-mono text-xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400 ${
-                    mzpLoading && mzpAuto ? 'opacity-50' : ''
-                  }`}
-                  aria-label="Código MZP"
-                  aria-live="polite"
-                >
-                  {mzpLoading && mzpAuto ? '…' : form.mzp || '—'}
-                </p>
-                {errors.mzp && (
-                  <p className="text-[10px] text-rose-500 dark:text-rose-400 mt-1">{errors.mzp}</p>
-                )}
-              </div>
-            }
           >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <FormField label="Cliente" required htmlFor="cliente_id" error={errors.cliente_id}
@@ -739,6 +768,7 @@ export default function SolicitudMiceFormPage({
                     error={!!errors.sector}
                     options={sectorOptions.length > 0 ? sectorOptions : sectores.map(s => ({ value: s, label: s }))}
                     disabled={effectiveLock || lockRegistro}
+                    searchable
                   />
                 </FormField>
                 <FormField label="Estado" required htmlFor="estado" error={errors.estado}
@@ -809,7 +839,7 @@ export default function SolicitudMiceFormPage({
                     disabled={effectiveLock || catalogLoading}
                   />
                 </FormField>
-                <FormField label="Fecha inicio" htmlFor="inicio" optional error={errors.inicio}
+                <FormField label="Fecha inicio" htmlFor="inicio" required={lockCotizacionFields} optional={!lockCotizacionFields} error={errors.inicio}
                   className="lg:col-span-1 min-w-0">
                   <Input
                     id="inicio"
@@ -824,7 +854,8 @@ export default function SolicitudMiceFormPage({
                 <FormField
                   label="Fecha fin"
                   htmlFor="fin"
-                  optional
+                  required={lockCotizacionFields}
+                  optional={!lockCotizacionFields}
                   error={errors.fin}
                   className="lg:col-span-1 min-w-0"
                   hint={form.inicio ? `Mínimo: ${form.inicio}` : undefined}
@@ -880,11 +911,11 @@ export default function SolicitudMiceFormPage({
                       readOnly={effectiveLock}
                     />
                   </FormField>
+                  {tieneTiquetes && (
                   <FormField
                     label="Tiqueteador"
                     htmlFor="tiqueteador"
-                    required={tieneTiquetes}
-                    optional={!tieneTiquetes}
+                    required
                     error={errors.tiqueteador_user_id}
                     className="w-full sm:flex-1 sm:min-w-48 min-w-0"
                   >
@@ -902,9 +933,10 @@ export default function SolicitudMiceFormPage({
                       error={!!errors.tiqueteador_user_id}
                       options={tiqueteadorOptions}
                       searchable
-                      disabled={effectiveLock || !tieneTiquetes || catalogLoading || !!usuariosTiqueteadorError}
+                      disabled={effectiveLock || catalogLoading || !!usuariosTiqueteadorError}
                     />
                   </FormField>
+                  )}
                 </div>
                 <div className="sm:col-span-2 lg:col-span-4">
                   <FormField
@@ -924,33 +956,31 @@ export default function SolicitudMiceFormPage({
               </div>
           </FormSection>
 
-          {mostrarSeccionCotizacion(etapaActual) && (
+          {isEdit && (
           <FormSection
             step={3}
             title="Cotización"
-            description="Valor cotizado, utilidad proyectada, fecha de entrega y probabilidad"
+            description="Valor cotizado, utilidad proyectada y probabilidad"
           >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-5 items-end">
                 <FormField
                   label="Valor cotizado"
                   htmlFor="valor_cotizado"
-                  required
+                  required={mostrarSeccionCotizacion(etapaActual)}
+                  optional={!mostrarSeccionCotizacion(etapaActual)}
                   error={errors.valor_cotizado}
                   className="sm:col-span-1 lg:col-span-4 min-w-0"
                 >
                   <div className="flex gap-2 min-w-0">
-                    <Select
-                      id="moneda_cotizacion"
-                      value={form.moneda_cotizacion}
-                      onChange={e => set('moneda_cotizacion', e.target.value as MonedaCotizacion)}
-                      disabled={effectiveLock}
-                      className="w-24 shrink-0"
-                      aria-label="Moneda de cotización"
-                    >
-                      {catalog.monedas.map(m => (
-                        <option key={m.codigo} value={m.codigo}>{m.codigo}</option>
-                      ))}
-                    </Select>
+                    <div className="w-24 shrink-0">
+                      <CustomSelect
+                        id="moneda_cotizacion"
+                        value={form.moneda_cotizacion}
+                        onChange={v => set('moneda_cotizacion', v as MonedaCotizacion)}
+                        disabled={effectiveLock || lockCotizacionFields}
+                        options={catalog.monedas.map(m => ({ value: m.codigo, label: m.codigo }))}
+                      />
+                    </div>
                     <DecimalInput
                       id="valor_cotizado"
                       value={form.valor_cotizado}
@@ -958,14 +988,15 @@ export default function SolicitudMiceFormPage({
                       placeholder="0"
                       className="min-w-0 flex-1"
                       error={!!errors.valor_cotizado}
-                      disabled={effectiveLock}
+                      disabled={effectiveLock || lockCotizacionFields}
                     />
                   </div>
                 </FormField>
                 <FormField
                   label="Utilidad proyectada"
                   htmlFor="utilidad"
-                  required
+                  required={mostrarSeccionCotizacion(etapaActual)}
+                  optional={!mostrarSeccionCotizacion(etapaActual)}
                   error={errors.utilidad_proyectada}
                   className="sm:col-span-1 lg:col-span-4 min-w-0"
                 >
@@ -975,33 +1006,16 @@ export default function SolicitudMiceFormPage({
                     onChange={v => set('utilidad_proyectada', v)}
                     placeholder="0"
                     error={!!errors.utilidad_proyectada}
-                    disabled={effectiveLock}
-                  />
-                </FormField>
-                <FormField
-                  label="Fecha entrega"
-                  htmlFor="fecha_entrega"
-                  required
-                  error={errors.fecha_entrega}
-                  className="sm:col-span-1 lg:col-span-2 lg:max-w-44 min-w-0"
-                >
-                  <Input
-                    id="fecha_entrega"
-                    type="date"
-                    value={form.fecha_entrega}
-                    min={form.fecha_solicitud || undefined}
-                    onChange={e => setFechaEntrega(e.target.value)}
-                    error={!!errors.fecha_entrega}
-                    disabled={effectiveLock}
-                    className="scheme-light dark:scheme-dark"
+                    disabled={effectiveLock || lockCotizacionFields}
                   />
                 </FormField>
                 <FormField
                   label="Probabilidad"
                   htmlFor="probabilidad"
-                  required
+                  required={mostrarSeccionCotizacion(etapaActual)}
+                  optional={!mostrarSeccionCotizacion(etapaActual)}
                   error={errors.probabilidad}
-                  className="sm:col-span-1 lg:col-span-2 lg:max-w-40 min-w-0"
+                  className="sm:col-span-1 lg:col-span-4 min-w-0"
                 >
                   <CustomSelect
                     id="probabilidad"
@@ -1040,9 +1054,14 @@ export default function SolicitudMiceFormPage({
                 className="sm:col-span-1 lg:col-span-4 min-w-0"
               >
                 <div className="flex gap-2 min-w-0">
-                  <span className="flex items-center px-2.5 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shrink-0">
-                    {form.moneda_cotizacion}
-                  </span>
+                  <div className="w-24 shrink-0">
+                    <CustomSelect
+                      value={form.moneda_cotizacion}
+                      onChange={v => set('moneda_cotizacion', v as MonedaCotizacion)}
+                      disabled
+                      options={catalog.monedas.map(m => ({ value: m.codigo, label: m.codigo }))}
+                    />
+                  </div>
                   <DecimalInput
                     id="valor_final_aprobado"
                     value={form.valor_final_aprobado}
@@ -1082,13 +1101,34 @@ export default function SolicitudMiceFormPage({
                   }
                   const pct = (ur / vf) * 100
                   return (
-                    <p className={`text-2xl font-bold py-1 ${pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    <p className={`text-2xl font-bold py-1 ${pct >= 17 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                       {pct.toFixed(1)}%
                     </p>
                   )
                 })()}
               </FormField>
             </div>
+          </FormSection>
+          )}
+
+          {mostrarSeccionCierre(etapaActual) && (
+          <FormSection
+            step={5}
+            title="Cierre"
+            description="Facturas y recibos de caja del evento"
+          >
+            <FormField
+              label="Documentos"
+              error={errors.documentos}
+              required={siguienteEtapa(etapaActual ?? 'en_cierre') === 'cerrado'}
+            >
+              <DocumentosMiceEditor
+                value={form.documentos}
+                onChange={docs => set('documentos', docs)}
+                readOnly={effectiveLock}
+                error={errors.documentos}
+              />
+            </FormField>
           </FormSection>
           )}
 
@@ -1107,7 +1147,7 @@ export default function SolicitudMiceFormPage({
                 <SeguimientoMiceChat
                   solicitudId={solicitudId}
                   currentUserId={user?.id ?? ''}
-                  autorNombre={form.responsable_nombre.trim() || user?.email || 'Usuario'}
+                  autorNombre={currentUserName || user?.email || 'Usuario'}
                   pendingMessage={pendingSeguimiento}
                   onPendingMessageChange={setPendingSeguimiento}
                   readOnly={effectiveLock || formBusy}
@@ -1147,17 +1187,20 @@ export default function SolicitudMiceFormPage({
                   </Button>
                   {isEdit && solicitudId && puedeAvanzar(etapaActual) && (() => {
                     const siguiente = siguienteEtapa(etapaActual!)
-                    return siguiente ? (
+                    if (!siguiente) return null
+                    const avanzarBloqueado = catalogLoading || formBusy || formHydrating || !puedeAvanzarAhora
+                    return (
                       <Button
                         type="button"
                         loading={isSaving}
-                        disabled={catalogLoading || formBusy || formHydrating}
+                        disabled={avanzarBloqueado}
                         size="lg"
                         onClick={handleAvanzarEtapa}
+                        title={!puedeAvanzarAhora ? 'Complete los campos requeridos para avanzar' : undefined}
                       >
                         Avanzar a "{labelEtapa(siguiente)}"
                       </Button>
-                    ) : null
+                    )
                   })()}
                 </div>
               </div>

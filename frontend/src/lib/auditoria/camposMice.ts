@@ -85,6 +85,8 @@ export function buildAuditoriaMiceObservacion(
 
   push(lineaModificado('Valor cotizado', dineroTexto(antes.valor_cotizado, antes.moneda_cotizacion), dineroTexto(despues.valor_cotizado, despues.moneda_cotizacion)))
 
+  push(lineaModificado('Valor final aprobado', dineroTexto(antes.valor_final_aprobado, antes.moneda_cotizacion), dineroTexto(despues.valor_final_aprobado, despues.moneda_cotizacion)))
+
   if (antes.moneda_cotizacion !== despues.moneda_cotizacion) {
     push(
       lineaModificado(
@@ -102,6 +104,14 @@ export function buildAuditoriaMiceObservacion(
     ? `${despues.moneda_cotizacion} ${formatDecimalCO(despues.utilidad_proyectada)}`
     : VACIO_AUDITORIA
   push(lineaModificado('Utilidad proyectada', utilAntes, utilDespues))
+
+  const utilRealAntes = antes.utilidad_real.trim()
+    ? `${antes.moneda_cotizacion} ${formatDecimalCO(antes.utilidad_real)}`
+    : VACIO_AUDITORIA
+  const utilRealDespues = despues.utilidad_real.trim()
+    ? `${despues.moneda_cotizacion} ${formatDecimalCO(despues.utilidad_real)}`
+    : VACIO_AUDITORIA
+  push(lineaModificado('Utilidad real', utilRealAntes, utilRealDespues))
 
   if (antes.tiqueteador_user_id !== despues.tiqueteador_user_id) {
     push(
@@ -138,6 +148,25 @@ export function buildAuditoriaMiceObservacion(
       despues.destinos,
       d => `${d.pais}|${d.ciudad}`,
       destinoLabel
+    )
+  )
+
+  lineas.push(
+    ...diffListaAuditoria(
+      'Facturas',
+      antes.documentos.filter(d => d.tipo === 'factura'),
+      despues.documentos.filter(d => d.tipo === 'factura'),
+      d => d.numero,
+      d => d.numero
+    )
+  )
+  lineas.push(
+    ...diffListaAuditoria(
+      'Recibos de caja',
+      antes.documentos.filter(d => d.tipo === 'recibo_caja'),
+      despues.documentos.filter(d => d.tipo === 'recibo_caja'),
+      d => d.numero,
+      d => d.numero
     )
   )
 

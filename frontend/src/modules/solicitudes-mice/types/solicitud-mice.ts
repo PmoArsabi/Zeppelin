@@ -10,6 +10,22 @@ export interface DestinoMice {
   ciudad: string
 }
 
+export type TipoDocumentoMice = 'factura' | 'recibo_caja'
+
+export interface DocumentoMice {
+  tipo: TipoDocumentoMice
+  numero: string
+}
+
+export const FACTURA_REGEX = /^[A-Za-z]{1,4}\d{1,8}$/
+export const RECIBO_CAJA_REGEX = /^[A-Za-z]{2}\d{1,6}$/
+
+/**
+ * Al agregar un campo nuevo aquí, también actualizarlo en:
+ * - formToPayload (guardar en BD)
+ * - rowToForm (cargar desde BD)
+ * - camposMice.ts (auditoría / historial de cambios)
+ */
 export interface SolicitudMiceForm {
   anio: number
   responsable_id: string
@@ -45,6 +61,8 @@ export interface SolicitudMiceForm {
   /** Etapa En operación */
   valor_final_aprobado: string
   utilidad_real: string
+  /** Etapa En cierre */
+  documentos: DocumentoMice[]
 }
 
 export const INITIAL_FORM_MICE = (): SolicitudMiceForm => ({
@@ -76,6 +94,7 @@ export const INITIAL_FORM_MICE = (): SolicitudMiceForm => ({
   probabilidad_id: null,
   valor_final_aprobado: '',
   utilidad_real: '',
+  documentos: [],
 })
 
 /** Columnas reales en th_solicitud_mice (post-limpieza) */

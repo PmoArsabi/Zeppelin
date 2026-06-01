@@ -209,6 +209,7 @@ export function rowToForm(
     probabilidad: enriched.probabilidad ?? '',
     valor_final_aprobado: enriched.valor_final_aprobado != null ? formatDecimalCO(enriched.valor_final_aprobado) : '',
     utilidad_real: enriched.utilidad_real != null ? formatDecimalCO(enriched.utilidad_real) : '',
+    documentos: relaciones?.documentos ?? [],
   }
 }
 
@@ -260,6 +261,8 @@ export async function loadSolicitudForEdit(
 export async function saveSolicitudMice(
   form: SolicitudMiceForm,
   userId: string,
+  /** Nombre del usuario logueado que realiza el cambio (para auditoría y seguimientos). */
+  autorNombre: string,
   catalog: MiceCatalogos,
   editId?: string,
   primerSeguimiento?: string,
@@ -309,7 +312,7 @@ export async function saveSolicitudMice(
         'solicitudes-mice',
         editId,
         userId,
-        form.responsable_nombre.trim() || 'Usuario',
+        autorNombre,
         observacion
       )
       auditWarning = audit.warning
@@ -327,12 +330,7 @@ export async function saveSolicitudMice(
 
   const segText = primerSeguimiento?.trim()
   if (segText) {
-    const seg = await addSeguimientoMice(
-      newId,
-      userId,
-      form.responsable_nombre.trim() || 'Usuario',
-      segText
-    )
+    const seg = await addSeguimientoMice(newId, userId, autorNombre, segText)
     if (seg.error) return { error: seg.error, id: newId }
   }
 
