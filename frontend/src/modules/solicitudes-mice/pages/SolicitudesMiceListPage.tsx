@@ -34,6 +34,20 @@ function rowResponsable(row: SolicitudMiceRow) { return row.responsable_nombre?.
 function rowEstado(row: SolicitudMiceRow)      { return row.estado?.trim() || 'Sin estado' }
 function rowAnio(row: SolicitudMiceRow)        { return String(row.anio || row.fecha_solicitud?.slice(0, 4) || 'Sin año') }
 
+const ESTADOS_CON_ALERTA_SEGUIMIENTO = ['cotizacion_enviada', 'seguimiento']
+const DIAS_ALERTA = 3
+
+/** Retorna true si la solicitud lleva más de 3 días sin actividad en estados que requieren seguimiento */
+function necesitaSeguimiento(row: SolicitudMiceRow): boolean {
+  const etapaCodigo = row.estado?.toLowerCase().replace(/\s+/g, '_')
+    .replace(/ó/g, 'o').replace(/ú/g, 'u').replace(/é/g, 'e').replace(/á/g, 'a').replace(/í/g, 'i')
+  if (!ESTADOS_CON_ALERTA_SEGUIMIENTO.includes(etapaCodigo ?? '')) return false
+  const ref = row.updated_at
+  if (!ref) return false
+  const diasSinActividad = (Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24)
+  return diasSinActividad > DIAS_ALERTA
+}
+
 
 
 interface ResponsableKpi {
@@ -554,8 +568,9 @@ function MiceSolicitudMobileCard({
   onEdit: (row: SolicitudMiceRow) => void
   canEdit: boolean
 }) {
+  const alerta = necesitaSeguimiento(row)
   return (
-    <article className="p-4">
+    <article className={`p-4 ${alerta ? 'bg-rose-50/60 dark:bg-rose-900/10' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
           <p className="font-mono text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
@@ -565,9 +580,16 @@ function MiceSolicitudMobileCard({
             {row.nombre}
           </p>
         </div>
-        <Badge variant={estadoBadgeVariant(row.estado)} className="text-[10px] px-1.5 py-0 shrink-0 max-w-[45%] truncate">
-          {row.estado}
-        </Badge>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Badge variant={estadoBadgeVariant(row.estado)} className="text-[10px] px-1.5 py-0 max-w-[45%] truncate">
+            {row.estado}
+          </Badge>
+          {alerta && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
+              +{DIAS_ALERTA}d sin actividad
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs mb-3">
@@ -800,10 +822,14 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(row => (
+                  {filtered.map(row => {
+                    const alerta = necesitaSeguimiento(row)
+                    return (
                     <tr
                       key={row.id}
-                      className="border-b border-slate-50 dark:border-gray-800/80 hover:bg-slate-50/80 dark:hover:bg-gray-800/40"
+                      className={`border-b border-slate-50 dark:border-gray-800/80 hover:bg-slate-50/80 dark:hover:bg-gray-800/40
+                        ${alerta ? 'bg-rose-50/60 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20' : ''}`}
+                      title={alerta ? `Sin actividad hace más de ${DIAS_ALERTA} días` : undefined}
                     >
                       <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
                         {formatDateDDMMYYYY(row.fecha_solicitud)}
@@ -828,9 +854,16 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                       </td>
                       <td className={`${TD} text-slate-500 whitespace-nowrap`}>{row.probabilidad ?? '—'}</td>
                       <td className={TD}>
-                        <Badge variant={estadoBadgeVariant(row.estado)} className="text-[10px] px-1.5 py-0">
-                          {row.estado}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant={estadoBadgeVariant(row.estado)} className="text-[10px] px-1.5 py-0">
+                            {row.estado}
+                          </Badge>
+                          {alerta && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
+                              +{DIAS_ALERTA}d sin actividad
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={`${TD} text-right whitespace-nowrap tabular-nums`}>
                         {fmtMoney(row.valor_cotizado, row.moneda_cotizacion ?? 'COP')}
@@ -839,7 +872,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                         <MiceRowActions row={row} onView={onView} onEdit={onEdit} canEdit={hasPermission('mice', 'editar')} layout="icons" />
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
