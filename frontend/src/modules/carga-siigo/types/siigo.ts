@@ -21,7 +21,31 @@ export const MESES: { value: number; label: string }[] = [
   { value: 12, label: 'Diciembre' },
 ]
 
-/** Columnas requeridas por tipo. Las columnas opcionales se leen si existen. */
+/**
+ * Prefijos mínimos para identificar cada columna.
+ * Siigo trunca algunos encabezados (ej. SUBCUENTA → SUBCUENT),
+ * por lo que se usa matching por prefijo en lugar de nombre exacto.
+ * El orden importa: prefijos más largos primero para evitar coincidencias ambiguas.
+ */
+export const COLUMNA_PREFIJOS: Record<string, string> = {
+  GRUPO:            'GRUPO',
+  CUENTA:           'CUENTA',
+  SUBCUENTA:        'SUBCUENT',   // Siigo: SUBCUENT
+  AUXILIAR:         'AUXIL',      // Siigo: AUXILIAR
+  SUBAUXIL:         'SUBAUX',     // Siigo: SUBAUXIL
+  NIT:              'NIT',
+  SUCURSAL:         'SUCURSAL',
+  'DIG. VERIFICACION': 'DIG',     // Siigo: DIG. VERIFICACION
+  'CENTRO C':       'CENTRO',
+  DESCRIPCION:      'DESCRIP',
+  'ULT. MOV.':      'ULT',
+  'SALDO ANTERIOR': 'SALDO A',
+  DEBITOS:          'DEBIT',
+  CREDITOS:         'CREDIT',
+  'NUEVO SALDO':    'NUEVO',
+}
+
+/** Columnas requeridas por tipo (usando los nombres canónicos de COLUMNA_PREFIJOS) */
 export const COLUMNAS_REQUERIDAS: Record<TipoDocumentoSiigo, string[]> = {
   cuentas_pagar: [
     'GRUPO','CUENTA','SUBCUENTA','AUXILIAR','SUBAUXIL',
@@ -57,10 +81,17 @@ export interface FilaSiigo {
   nuevo_saldo:      number | null
 }
 
+export interface FilaIgnorada {
+  nroFila: number
+  motivo: 'vacia' | 'total'
+  descripcion: string | null
+}
+
 export interface ResultadoParseo {
   filas: FilaSiigo[]
+  filasConError: Array<{ nroFila: number; fila: FilaSiigo | null; errores: ErrorParseo[] }>
+  filasIgnoradas: FilaIgnorada[]
   errores: ErrorParseo[]
-  filasIgnoradas: number
 }
 
 export interface ErrorParseo {

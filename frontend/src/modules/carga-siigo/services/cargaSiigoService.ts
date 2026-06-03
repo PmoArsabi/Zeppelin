@@ -45,9 +45,21 @@ export async function cargarSiigo(
     sobreescribio = true
   }
 
-  // 3. Insertar en lotes de 500 para no sobrecargar
+  // 3. Preparar payload según tipo (ingresos_gastos no tiene nit/sucursal/dig_verificacion)
+  const esIngresosGastos = tipo === 'ingresos_gastos'
   const LOTE = 500
-  const payload = filas.map(f => ({ ...f, mes, anio, uploaded_by: userId }))
+  const payload = filas.map(f => {
+    const base = {
+      mes, anio, uploaded_by: userId,
+      grupo: f.grupo, cuenta: f.cuenta, subcuenta: f.subcuenta,
+      auxiliar: f.auxiliar, subauxil: f.subauxil,
+      descripcion: f.descripcion, ult_mov: f.ult_mov,
+      saldo_anterior: f.saldo_anterior, debitos: f.debitos,
+      creditos: f.creditos, nuevo_saldo: f.nuevo_saldo,
+    }
+    if (esIngresosGastos) return base
+    return { ...base, nit: f.nit, sucursal: f.sucursal, dig_verificacion: f.dig_verificacion }
+  })
   let insertadas = 0
 
   for (let i = 0; i < payload.length; i += LOTE) {

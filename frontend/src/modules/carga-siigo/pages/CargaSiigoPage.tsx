@@ -63,6 +63,8 @@ export default function CargaSiigoPage() {
     setHayPrevios(false)
     setErrorMsg(null)
     setResultMsg(null)
+    setFiltroVista('todos')
+    setPagina(1)
   }
 
   const handleFile = async (file: File) => {
@@ -121,6 +123,23 @@ export default function CargaSiigoPage() {
   const anioOptions = ANIOS.map(a => ({ value: String(a), label: String(a) }))
 
   const hayErrores = (parseo?.errores.length ?? 0) > 0
+  const [filasPorPagina, setFilasPorPagina] = useState(20)
+  const [pagina, setPagina] = useState(1)
+  const [filtroVista, setFiltroVista] = useState<'todos' | 'errores' | 'ignorados'>('todos')
+
+  // Filas a mostrar según filtro activo
+  const filasVista = (() => {
+    if (!parseo) return []
+    if (filtroVista === 'errores') return parseo.filasConError.map(f => ({ ...f.fila!, _nroFila: f.nroFila, _errores: f.errores }))
+    if (filtroVista === 'ignorados') return parseo.filasIgnoradas.map(f => ({
+      grupo: null, cuenta: null, subcuenta: null, auxiliar: null, subauxil: null,
+      nit: null, sucursal: null, dig_verificacion: null,
+      descripcion: f.descripcion ?? `(fila ${f.nroFila} — ${f.motivo === 'total' ? 'total' : 'vacía'})`,
+      ult_mov: null, saldo_anterior: null, debitos: null, creditos: null, nuevo_saldo: null,
+      _nroFila: f.nroFila, _errores: [] as typeof parseo.errores,
+    }))
+    return parseo.filas.map((f, i) => ({ ...f, _nroFila: i + 8, _errores: [] as typeof parseo.errores }))
+  })()
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-10 min-w-0">
@@ -240,20 +259,35 @@ export default function CargaSiigoPage() {
                 </button>
               </div>
 
-              {/* Resumen */}
-              <div className="flex flex-wrap gap-3">
-                <span className="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-medium">
+              {/* Badges / filtros de vista */}
+              <div className="flex flex-wrap gap-2">
+                <button type="button"
+                  onClick={() => setFiltroVista('todos')}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all
+                    ${filtroVista === 'todos'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-500/20'}`}>
                   {parseo.filas.length} registros
-                </span>
-                {parseo.filasIgnoradas > 0 && (
-                  <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
-                    {parseo.filasIgnoradas} ignorados (vacíos / total)
-                  </span>
+                </button>
+                {parseo.filasIgnoradas.length > 0 && (
+                  <button type="button"
+                    onClick={() => { setFiltroVista(filtroVista === 'ignorados' ? 'todos' : 'ignorados'); setPagina(1) }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all
+                      ${filtroVista === 'ignorados'
+                        ? 'bg-slate-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+                    {parseo.filasIgnoradas.length} ignorados
+                  </button>
                 )}
                 {hayErrores && (
-                  <span className="text-xs px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 font-medium">
+                  <button type="button"
+                    onClick={() => { setFiltroVista(filtroVista === 'errores' ? 'todos' : 'errores'); setPagina(1) }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all
+                      ${filtroVista === 'errores'
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20'}`}>
                     {parseo.errores.length} errores
-                  </span>
+                  </button>
                 )}
               </div>
 
@@ -264,54 +298,105 @@ export default function CargaSiigoPage() {
                 </Alert>
               )}
 
-              {hayErrores && (
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">Errores encontrados:</p>
-                  <div className="max-h-40 overflow-y-auto rounded-lg border border-rose-200 dark:border-rose-800 divide-y divide-rose-100 dark:divide-rose-900">
-                    {parseo.errores.map((e, i) => (
-                      <div key={i} className="px-3 py-1.5 text-xs text-rose-700 dark:text-rose-300">
-                        Fila {e.fila} — {e.columna}: {e.mensaje}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {hayErrores && filtroVista !== 'errores' && (
+                <p className="text-xs text-rose-600 dark:text-rose-400">
+                  Haga clic en <strong>{parseo.errores.length} errores</strong> para ver las filas con problemas.
+                </p>
               )}
 
-              {/* Tabla preview (primeras 20 filas) */}
-              {!hayErrores && parseo.filas.length > 0 && (
+              {/* Tabla preview */}
+              {filasVista.length > 0 && (
                 <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
                   <table className="w-full text-[11px] min-w-225">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
+                        <th className="px-3 py-2 font-semibold text-slate-400 whitespace-nowrap">#</th>
                         {['Grupo','Cuenta','Subcuenta','Aux.','Subaux.','NIT','Descripción','Últ. Mov.','Saldo Ant.','Débitos','Créditos','Nuevo Saldo'].map(h => (
                           <th key={h} className="px-3 py-2 font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {parseo.filas.slice(0, 20).map((f, i) => (
-                        <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.grupo ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.cuenta ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.subcuenta ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.auxiliar ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.subauxil ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.nit ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-slate-800 dark:text-slate-200 max-w-48 truncate" title={f.descripcion ?? ''}>{f.descripcion ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{f.ult_mov ? formatDateDDMMYYYY(f.ult_mov) : '—'}</td>
-                          <td className={`px-3 py-1.5 text-right tabular-nums whitespace-nowrap ${(f.saldo_anterior ?? 0) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'}`}>{fmtMoneda(f.saldo_anterior)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">{fmtMoneda(f.debitos)}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">{fmtMoneda(f.creditos)}</td>
-                          <td className={`px-3 py-1.5 text-right tabular-nums whitespace-nowrap font-medium ${(f.nuevo_saldo ?? 0) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{fmtMoneda(f.nuevo_saldo)}</td>
-                        </tr>
-                      ))}
+                      {filasVista.slice((pagina - 1) * filasPorPagina, pagina * filasPorPagina).map((f, i) => {
+                        const tieneError = filtroVista === 'errores' && f._errores.length > 0
+                        const esIgnorada = filtroVista === 'ignorados'
+                        return (
+                          <tr key={i} className={`
+                            ${tieneError ? 'bg-rose-50/60 dark:bg-rose-900/10' : ''}
+                            ${esIgnorada ? 'bg-slate-50/60 dark:bg-slate-800/30 opacity-70' : ''}
+                            hover:bg-slate-50/80 dark:hover:bg-slate-800/40
+                          `}>
+                            <td className="px-3 py-1.5 text-slate-400 tabular-nums">{f._nroFila}</td>
+                            <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.grupo ?? '—'}</td>
+                            <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.cuenta ?? '—'}</td>
+                            <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.subcuenta ?? '—'}</td>
+                            <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.auxiliar ?? '—'}</td>
+                            <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.subauxil ?? '—'}</td>
+                            <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{f.nit ?? '—'}</td>
+                            <td className="px-3 py-1.5 text-slate-800 dark:text-slate-200 max-w-48 truncate" title={f.descripcion ?? ''}>
+                              {f.descripcion ?? '—'}
+                              {tieneError && (
+                                <div className="text-[10px] text-rose-600 dark:text-rose-400 mt-0.5">
+                                  {f._errores.map((e, j) => <span key={j} className="block">{e.columna}: {e.mensaje}</span>)}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{f.ult_mov ? formatDateDDMMYYYY(f.ult_mov) : '—'}</td>
+                            <td className={`px-3 py-1.5 text-right tabular-nums whitespace-nowrap ${(f.saldo_anterior ?? 0) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'}`}>{fmtMoneda(f.saldo_anterior)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">{fmtMoneda(f.debitos)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">{fmtMoneda(f.creditos)}</td>
+                            <td className={`px-3 py-1.5 text-right tabular-nums whitespace-nowrap font-medium ${(f.nuevo_saldo ?? 0) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{fmtMoneda(f.nuevo_saldo)}</td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
-                  {parseo.filas.length > 20 && (
-                    <p className="text-[10px] text-slate-400 text-center py-2 border-t border-slate-100 dark:border-slate-800">
-                      Mostrando 20 de {parseo.filas.length} registros. Todos se cargarán al confirmar.
-                    </p>
-                  )}
+                  {(() => {
+                    const totalPaginas = Math.ceil(filasVista.length / filasPorPagina)
+                    const inicio = (pagina - 1) * filasPorPagina + 1
+                    const fin = Math.min(pagina * filasPorPagina, filasVista.length)
+                    return (
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 border-t border-slate-100 dark:border-slate-800">
+                        {/* Info + navegación */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button type="button"
+                            onClick={() => setPagina(p => Math.max(1, p - 1))}
+                            disabled={pagina === 1}
+                            className="text-[10px] px-2 py-0.5 rounded font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400
+                              hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            ← Anterior
+                          </button>
+                          <span className="text-[10px] text-slate-400">
+                            {inicio}–{fin} de {filasVista.length}{' '}
+                            {filtroVista === 'todos' ? 'registros' : filtroVista === 'errores' ? 'con errores' : 'ignorados'}
+                            {totalPaginas > 1 && ` · Pág. ${pagina}/${totalPaginas}`}
+                          </span>
+                          <button type="button"
+                            onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                            disabled={pagina === totalPaginas}
+                            className="text-[10px] px-2 py-0.5 rounded font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400
+                              hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            Siguiente →
+                          </button>
+                        </div>
+                        {/* Filas por página */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] text-slate-400">Filas:</span>
+                          {[20, 50, 100, 200].map(n => (
+                            <button key={n} type="button"
+                              onClick={() => { setFilasPorPagina(n); setPagina(1) }}
+                              className={`text-[10px] px-2 py-0.5 rounded font-medium transition-colors
+                                ${filasPorPagina === n
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 
