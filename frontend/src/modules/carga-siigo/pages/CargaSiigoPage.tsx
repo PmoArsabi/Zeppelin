@@ -4,10 +4,10 @@ import PageTitle from '@/components/ui/PageTitle'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
 import CustomSelect from '@/components/ui/CustomSelect'
-import { parsearExcelSiigo } from '../lib/parsearExcelSiigo'
-import { cargarSiigo, existenDatosMes, fetchLogCargas } from '../services/cargaSiigoService'
-import type { TipoDocumentoSiigo, ResultadoParseo } from '../types/siigo'
-import { TIPO_LABELS, MESES } from '../types/siigo'
+import { parsearExcelSiigo, parsearExcelPresupuesto } from '../lib/parsearExcelSiigo'
+import { cargarSiigo, existenDatosMes, cargarPresupuesto, existenDatosAnio, fetchLogCargas } from '../services/cargaSiigoService'
+import type { TipoDocumentoSiigo, ResultadoParseo, ResultadoParseoPresupuesto } from '../types/siigo'
+import { TIPO_LABELS, MESES, TIPOS_MES_OPCIONAL } from '../types/siigo'
 import { formatDateDDMMYYYY } from '@/lib/formatDate'
 
 const ANIO_ACTUAL = new Date().getFullYear()
@@ -18,7 +18,7 @@ type Paso = 'config' | 'preview' | 'confirmando' | 'done'
 type LogEntry = {
   id: string
   tipo_documento: TipoDocumentoSiigo
-  mes: number
+  mes: number | null
   anio: number
   filas_insertadas: number
   sobreescribio: boolean
@@ -40,6 +40,7 @@ export default function CargaSiigoPage() {
   const [anio, setAnio]                 = useState<number>(ANIO_ACTUAL)
   const [fileName, setFileName]         = useState<string | null>(null)
   const [parseo, setParseo]             = useState<ResultadoParseo | null>(null)
+  const [parseoPresupuesto, setParseoPresupuesto] = useState<ResultadoParseoPresupuesto | null>(null)
   const [hayPrevios, setHayPrevios]     = useState(false)
   const [parsing, setParsing]           = useState(false)
   const [guardando, setGuardando]       = useState(false)
@@ -48,6 +49,8 @@ export default function CargaSiigoPage() {
   const [log, setLog]                   = useState<LogEntry[]>([])
   const [loadingLog, setLoadingLog]     = useState(false)
   const [tabActiva, setTabActiva]       = useState<'carga' | 'historial'>('carga')
+
+  const esMesOpcional = tipo !== '' && TIPOS_MES_OPCIONAL.has(tipo as TipoDocumentoSiigo)
 
   const cargarLog = useCallback(async () => {
     setLoadingLog(true)
@@ -60,6 +63,7 @@ export default function CargaSiigoPage() {
     setPaso('config')
     setFileName(null)
     setParseo(null)
+    setParseoPresupuesto(null)
     setHayPrevios(false)
     setErrorMsg(null)
     setResultMsg(null)
@@ -77,11 +81,18 @@ export default function CargaSiigoPage() {
     setParsing(true)
 
     const buffer = await file.arrayBuffer()
-    const resultado = parsearExcelSiigo(buffer, tipo as TipoDocumentoSiigo)
-    setParseo(resultado)
 
-    const previos = await existenDatosMes(tipo as TipoDocumentoSiigo, mes, anio)
-    setHayPrevios(previos)
+    if (tipo === 'presupuesto') {
+      const resultado = parsearExcelPresupuesto(buffer)
+      setParseoPresupuesto(resultado)
+      const previos = await existenDatosAnio(anio)
+      setHayPrevios(previos)
+    } else {
+      const resultado = parsearExcelSiigo(buffer, tipo as TipoDocumentoSiigo)
+      setParseo(resultado)
+      const previos = await existenDatosMes(tipo as TipoDocumentoSiigo, mes, anio)
+      setHayPrevios(previos)
+    }
 
     setParsing(false)
     setPaso('preview')
@@ -94,26 +105,36 @@ export default function CargaSiigoPage() {
   }
 
   const handleConfirmar = async () => {
-    if (!parseo || !tipo || !user) return
-    if (parseo.errores.length > 0) { setErrorMsg('Corrija los errores antes de confirmar.'); return }
+    if (!tipo || !user) return
 
-    setGuardando(true)
-    setPaso('confirmando')
-    const { insertadas, sobreescribio, error } = await cargarSiigo(
-      tipo as TipoDocumentoSiigo, mes, anio, parseo.filas, user.id
-    )
-    setGuardando(false)
-
-    if (error) {
-      setErrorMsg(`Error al guardar: ${error}`)
-      setPaso('preview')
-      return
+    if (tipo === 'presupuesto') {
+      if (!parseoPresupuesto) return
+      if (parseoPresupuesto.errores.length > 0) { setErrorMsg('Corrija los errores antes de confirmar.'); return }
+      setGuardando(true)
+      setPaso('confirmando')
+      const { insertadas, sobreescribio, error } = await cargarPresupuesto(anio, parseoPresupuesto.filas, user.id)
+      setGuardando(false)
+      if (error) { setErrorMsg(`Error al guardar: ${error}`); setPaso('preview'); return }
+      setResultMsg(
+        `${insertadas} meses de presupuesto cargados correctamente para ${anio}.` +
+        (sobreescribio ? ' Se sobreescribieron los datos anteriores del mismo año.' : '')
+      )
+    } else {
+      if (!parseo) return
+      if (parseo.errores.length > 0) { setErrorMsg('Corrija los errores antes de confirmar.'); return }
+      setGuardando(true)
+      setPaso('confirmando')
+      const { insertadas, sobreescribio, error } = await cargarSiigo(
+        tipo as TipoDocumentoSiigo, mes, anio, parseo.filas, user.id
+      )
+      setGuardando(false)
+      if (error) { setErrorMsg(`Error al guardar: ${error}`); setPaso('preview'); return }
+      setResultMsg(
+        `${insertadas} registros cargados correctamente para ${MESES.find(m => m.value === mes)?.label} ${anio}.` +
+        (sobreescribio ? ' Se sobreescribieron los datos anteriores del mismo período.' : '')
+      )
     }
 
-    setResultMsg(
-      `${insertadas} registros cargados correctamente para ${MESES.find(m => m.value === mes)?.label} ${anio}.` +
-      (sobreescribio ? ' Se sobreescribieron los datos anteriores del mismo período.' : '')
-    )
     setPaso('done')
     cargarLog()
   }
@@ -122,7 +143,9 @@ export default function CargaSiigoPage() {
   const mesOptions = MESES.map(m => ({ value: String(m.value), label: m.label }))
   const anioOptions = ANIOS.map(a => ({ value: String(a), label: String(a) }))
 
-  const hayErrores = (parseo?.errores.length ?? 0) > 0
+  const hayErrores = tipo === 'presupuesto'
+    ? (parseoPresupuesto?.errores.length ?? 0) > 0
+    : (parseo?.errores.length ?? 0) > 0
   const [filasPorPagina, setFilasPorPagina] = useState(20)
   const [pagina, setPagina] = useState(1)
   const [filtroVista, setFiltroVista] = useState<'todos' | 'errores' | 'ignorados'>('todos')
@@ -187,12 +210,15 @@ export default function CargaSiigoPage() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Mes *</label>
+                <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  Mes {esMesOpcional ? <span className="text-slate-400">(año completo)</span> : '*'}
+                </label>
                 <CustomSelect
-                  value={String(mes)}
+                  value={esMesOpcional ? '' : String(mes)}
                   onChange={v => { setMes(Number(v)); resetear() }}
                   options={mesOptions}
-                  disabled={paso === 'confirmando'}
+                  placeholder="Todos los meses"
+                  disabled={paso === 'confirmando' || esMesOpcional}
                 />
               </div>
               <div className="space-y-1">
@@ -247,8 +273,94 @@ export default function CargaSiigoPage() {
             </div>
           )}
 
-          {/* Paso 3: Preview */}
-          {(paso === 'preview' || paso === 'confirmando') && parseo && (
+          {/* Paso 3: Preview — Presupuesto */}
+          {(paso === 'preview' || paso === 'confirmando') && tipo === 'presupuesto' && parseoPresupuesto && (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-5 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  3. Vista previa — {fileName}
+                </p>
+                <button type="button" onClick={resetear} className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline">
+                  Cambiar archivo
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
+                  {parseoPresupuesto.filas.length} meses
+                </span>
+                {parseoPresupuesto.filasIgnoradas.length > 0 && (
+                  <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                    {parseoPresupuesto.filasIgnoradas.length} ignorados
+                  </span>
+                )}
+                {hayErrores && (
+                  <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400">
+                    {parseoPresupuesto.errores.length} errores
+                  </span>
+                )}
+              </div>
+
+              {hayPrevios && !hayErrores && (
+                <Alert variant="info">
+                  Ya existe presupuesto para <strong>{anio}</strong>. Al confirmar se reemplazará completamente.
+                </Alert>
+              )}
+
+              {parseoPresupuesto.filas.length > 0 && (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-left">
+                        {['Mes','CORP','MICE Ganado','MICE Nuevos','Total MICE','Total'].map(h => (
+                          <th key={h} className="px-3 py-2 font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap text-right first:text-left">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {parseoPresupuesto.filas.map((f, i) => {
+                        const totalMice = (f.mice_ganado ?? 0) + (f.mice_nuevos ?? 0)
+                        const total = (f.corp ?? 0) + totalMice
+                        const mesLabel = MESES.find(m => m.value === f.mes)?.label ?? `Mes ${f.mes}`
+                        return (
+                          <tr key={i} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                            <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300 font-medium">{mesLabel}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtMoneda(f.corp)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtMoneda(f.mice_ganado)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtMoneda(f.mice_nuevos)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmtMoneda(totalMice)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200">{fmtMoneda(total)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {parseoPresupuesto.filasConError.length > 0 && (
+                <div className="space-y-1">
+                  {parseoPresupuesto.filasConError.map((fe, i) => (
+                    <div key={i} className="text-[11px] text-rose-600 dark:text-rose-400">
+                      Fila {fe.nroFila}: {fe.errores.map(e => `${e.columna} — ${e.mensaje}`).join(' | ')}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!hayErrores && (
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="secondary" onClick={resetear} disabled={guardando}>Cancelar</Button>
+                  <Button onClick={handleConfirmar} loading={guardando} disabled={guardando}>
+                    {hayPrevios ? 'Sobreescribir y cargar' : 'Confirmar carga'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Paso 3: Preview — Siigo estándar */}
+          {(paso === 'preview' || paso === 'confirmando') && tipo !== 'presupuesto' && parseo && (
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-5 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
@@ -452,7 +564,9 @@ export default function CargaSiigoPage() {
                     <tr key={l.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatDateDDMMYYYY(l.created_at)}</td>
                       <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300">{TIPO_LABELS[l.tipo_documento]}</td>
-                      <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{MESES.find(m => m.value === l.mes)?.label} {l.anio}</td>
+                      <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">
+                        {l.mes ? `${MESES.find(m => m.value === l.mes)?.label} ${l.anio}` : `Año completo ${l.anio}`}
+                      </td>
                       <td className="px-4 py-2.5 font-semibold text-slate-800 dark:text-slate-200">{l.filas_insertadas}</td>
                       <td className="px-4 py-2.5">
                         {l.sobreescribio

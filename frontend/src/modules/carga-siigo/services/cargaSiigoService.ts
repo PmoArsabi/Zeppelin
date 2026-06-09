@@ -1,10 +1,11 @@
 import { supabase } from '@/lib/supabase'
-import type { TipoDocumentoSiigo, FilaSiigo } from '../types/siigo'
+import type { TipoDocumentoSiigo, FilaSiigo, FilaPresupuesto } from '../types/siigo'
 
 const TABLA: Record<TipoDocumentoSiigo, string> = {
   cuentas_pagar:   'th_siigo_cuentas_pagar',
   cuentas_cobrar:  'th_siigo_cuentas_cobrar',
   ingresos_gastos: 'th_siigo_ingresos_gastos',
+  presupuesto:     'th_siigo_presupuesto',
 }
 
 export async function existenDatosMes(
@@ -81,6 +82,56 @@ export async function cargarSiigo(
   })
 
   return { insertadas, sobreescribio, error: null }
+}
+
+export async function existenDatosAnio(anio: number): Promise<boolean> {
+  const { count } = await supabase
+    .from('th_siigo_presupuesto')
+    .select('id', { count: 'exact', head: true })
+    .eq('anio', anio)
+  return (count ?? 0) > 0
+}
+
+export async function cargarPresupuesto(
+  anio: number,
+  filas: FilaPresupuesto[],
+  userId: string
+): Promise<{ insertadas: number; sobreescribio: boolean; error: string | null }> {
+  let sobreescribio = false
+
+  const hayPrevios = await existenDatosAnio(anio)
+  if (hayPrevios) {
+    const { error: delError } = await supabase
+      .from('th_siigo_presupuesto')
+      .delete()
+      .eq('anio', anio)
+    if (delError) return { insertadas: 0, sobreescribio: false, error: delError.message }
+    sobreescribio = true
+  }
+
+  const payload = filas.map(f => ({
+    anio,
+    mes:         f.mes,
+    corp:        f.corp,
+    mice_ganado: f.mice_ganado,
+    mice_nuevos: f.mice_nuevos,
+    uploaded_by: userId,
+  }))
+
+  const { error: insError } = await supabase.from('th_siigo_presupuesto').insert(payload)
+  if (insError) return { insertadas: 0, sobreescribio, error: insError.message }
+
+  await supabase.from('th_siigo_log_cargas').insert({
+    tipo_documento:   'presupuesto',
+    mes:              null,
+    anio,
+    filas_insertadas: filas.length,
+    filas_ignoradas:  0,
+    sobreescribio,
+    uploaded_by:      userId,
+  })
+
+  return { insertadas: filas.length, sobreescribio, error: null }
 }
 
 export async function fetchLogCargas() {

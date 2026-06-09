@@ -1,10 +1,14 @@
-export type TipoDocumentoSiigo = 'cuentas_pagar' | 'cuentas_cobrar' | 'ingresos_gastos'
+export type TipoDocumentoSiigo = 'cuentas_pagar' | 'cuentas_cobrar' | 'ingresos_gastos' | 'presupuesto'
 
 export const TIPO_LABELS: Record<TipoDocumentoSiigo, string> = {
   cuentas_pagar:    'Cuentas por pagar',
   cuentas_cobrar:   'Cuentas por cobrar clientes nacionales',
   ingresos_gastos:  'Ingresos y gastos',
+  presupuesto:      'Presupuesto',
 }
+
+/** Tipos donde el mes NO es obligatorio (se sube el año completo) */
+export const TIPOS_MES_OPCIONAL: Set<TipoDocumentoSiigo> = new Set(['presupuesto'])
 
 export const MESES: { value: number; label: string }[] = [
   { value: 1,  label: 'Enero' },
@@ -61,6 +65,7 @@ export const COLUMNAS_REQUERIDAS: Record<TipoDocumentoSiigo, string[]> = {
     'GRUPO','CUENTA','SUBCUENTA','AUXILIAR','SUBAUXIL',
     'DESCRIPCION','ULT. MOV.','SALDO ANTERIOR','DEBITOS','CREDITOS','NUEVO SALDO',
   ],
+  presupuesto: ['MES','CORP','MICE GANADO','MICE NUEVOS NEGOCIOS'],
 }
 
 /** Fila cruda parseada del Excel (antes de tipado) */
@@ -103,4 +108,18 @@ export interface ErrorParseo {
 export interface EstadoCarga {
   tipo: 'idle' | 'parsing' | 'preview' | 'confirming' | 'done' | 'error'
   mensaje?: string
+}
+
+export interface FilaPresupuesto {
+  mes:         number
+  corp:        number | null
+  mice_ganado: number | null
+  mice_nuevos: number | null
+}
+
+export interface ResultadoParseoPresupuesto {
+  filas:          FilaPresupuesto[]
+  filasConError:  Array<{ nroFila: number; errores: ErrorParseo[] }>
+  filasIgnoradas: FilaIgnorada[]
+  errores:        ErrorParseo[]
 }
