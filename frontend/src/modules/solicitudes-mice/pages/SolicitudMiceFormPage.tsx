@@ -200,7 +200,7 @@ export default function SolicitudMiceFormPage({
   onSaved,
   onCancel,
 }: Props) {
-  const { user, displayName: currentUserName } = useAuth()
+  const { user, displayName: currentUserName, isAdmin } = useAuth()
   const isEdit = editTarget !== null
   const lock = readOnly
   const mzpAuto = !isEdit && !lock
@@ -254,6 +254,8 @@ export default function SolicitudMiceFormPage({
 
   const tieneTiquetes = form.servicios.includes('SRV-01')
   const effectiveLock = lock
+  /** El responsable solo puede modificarse al crear, o por un administrador */
+  const lockResponsable = isEdit && !lock && !isAdmin
   /** En operación y posterior: valor cotizado, utilidad proyectada y fecha entrega son de solo lectura */
   const lockCotizacionFields = isEdit && ['en_operacion', 'en_cierre', 'cerrado'].includes(etapaActual ?? '')
 
@@ -811,7 +813,7 @@ const estadoOptions = useMemo(() => {
                     options={responsableOptions}
                     searchable
                     error={!!errors.responsable_id}
-                    disabled={effectiveLock || !!usuariosResponsableMiceError}
+                    disabled={effectiveLock || lockResponsable || !!usuariosResponsableMiceError}
                   />
                 </FormField>
                 <FormField label="Nombre (evento / grupo)" required htmlFor="nombre" error={errors.nombre}

@@ -59,6 +59,17 @@ function necesitaSeguimiento(row: SolicitudMiceRow): boolean {
   return diasSinActividad > dias
 }
 
+const ESTADOS_ANTES_DE_CIERRE = ['en_cotizacion', 'cotizacion_enviada', 'seguimiento', 'en_operacion']
+
+/** Retorna true si ya pasó la fecha del evento (fin) y la solicitud aún no está en cierre o posterior */
+function necesitaPasarACierre(row: SolicitudMiceRow): boolean {
+  const etapaCodigo = row.estado?.toLowerCase().replace(/\s+/g, '_')
+    .replace(/ó/g, 'o').replace(/ú/g, 'u').replace(/é/g, 'e').replace(/á/g, 'a').replace(/í/g, 'i')
+  if (!ESTADOS_ANTES_DE_CIERRE.includes(etapaCodigo ?? '')) return false
+  if (!row.fin) return false
+  return new Date(row.fin).getTime() < Date.now()
+}
+
 
 
 interface ResponsableKpi {
@@ -574,8 +585,9 @@ function MiceSolicitudMobileCard({
   canEdit: boolean
 }) {
   const alerta = necesitaSeguimiento(row)
+  const alertaCierre = necesitaPasarACierre(row)
   return (
-    <article className={`p-4 ${alerta ? 'bg-rose-50/60 dark:bg-rose-900/10' : ''}`}>
+    <article className={`p-4 ${alerta || alertaCierre ? 'bg-rose-50/60 dark:bg-rose-900/10' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
           <p className="font-mono text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
@@ -597,6 +609,11 @@ function MiceSolicitudMobileCard({
           {alerta && (
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
               +{diasAlertaParaRow(row)}d sin actividad
+            </span>
+          )}
+          {alertaCierre && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
+              Pasar a En cierre
             </span>
           )}
         </div>
@@ -834,12 +851,13 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                 <tbody>
                   {filtered.map(row => {
                     const alerta = necesitaSeguimiento(row)
+                    const alertaCierre = necesitaPasarACierre(row)
                     return (
                     <tr
                       key={row.id}
                       className={`border-b border-slate-50 dark:border-gray-800/80 hover:bg-slate-50/80 dark:hover:bg-gray-800/40
-                        ${alerta ? 'bg-rose-50/60 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20' : ''}`}
-                      title={alerta ? `Sin actividad hace más de ${diasAlertaParaRow(row)} días` : undefined}
+                        ${alerta || alertaCierre ? 'bg-rose-50/60 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20' : ''}`}
+                      title={alerta ? `Sin actividad hace más de ${diasAlertaParaRow(row)} días` : alertaCierre ? 'La fecha del evento ya pasó — debe pasar a En cierre' : undefined}
                     >
                       <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
                         {formatDateDDMMYYYY(row.fecha_solicitud)}
@@ -876,6 +894,11 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                           {alerta && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
                               +{diasAlertaParaRow(row)}d sin actividad
+                            </span>
+                          )}
+                          {alertaCierre && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
+                              Pasar a En cierre
                             </span>
                           )}
                         </div>
