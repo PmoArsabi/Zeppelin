@@ -69,6 +69,24 @@ export async function searchClientesZeppelin(query: string, limit = 20): Promise
   return { data: parseClientesRows(data ?? []), error: null }
 }
 
+/** Carga clientes por una lista de IDs (para resolver nombres en listados) */
+export async function fetchClientesByIds(ids: number[]): Promise<{
+  data: ClienteZeppelin[]
+  error: string | null
+}> {
+  const unicos = Array.from(new Set(ids.filter(id => Number.isFinite(id))))
+  if (unicos.length === 0) return { data: [], error: null }
+
+  const { data, error } = await supabase
+    .schema(RAW_SCHEMA)
+    .from(CLIENTES_TABLE)
+    .select('customerid, fullname')
+    .in('customerid', unicos)
+
+  if (error) return { data: [], error: error.message }
+  return { data: parseClientesRows(data ?? []), error: null }
+}
+
 /** Carga un cliente por ID (para resolver el seleccionado cuando no está en la lista) */
 export async function fetchClienteById(id: number): Promise<ClienteZeppelin | null> {
   const { data, error } = await supabase

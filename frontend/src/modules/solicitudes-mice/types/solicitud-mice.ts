@@ -12,9 +12,10 @@ export interface DestinoMice {
 
 export type TipoDocumentoMice = 'factura' | 'recibo_caja'
 
-export interface DocumentoMice {
-  tipo: TipoDocumentoMice
+export interface FacturaMice {
   numero: string
+  /** Número del recibo de caja asociado, o null si no tiene. */
+  recibo_caja_numero: string | null
 }
 
 export const FACTURA_REGEX = /^[A-Za-z]{1,4}\d{1,8}$/
@@ -62,7 +63,7 @@ export interface SolicitudMiceForm {
   valor_final_aprobado: string
   utilidad_real: string
   /** Etapa En cierre */
-  documentos: DocumentoMice[]
+  facturas: FacturaMice[]
 }
 
 export const INITIAL_FORM_MICE = (): SolicitudMiceForm => ({
@@ -94,7 +95,7 @@ export const INITIAL_FORM_MICE = (): SolicitudMiceForm => ({
   probabilidad_id: null,
   valor_final_aprobado: '',
   utilidad_real: '',
-  documentos: [],
+  facturas: [],
 })
 
 /** Columnas reales en th_solicitud_mice (post-limpieza) */

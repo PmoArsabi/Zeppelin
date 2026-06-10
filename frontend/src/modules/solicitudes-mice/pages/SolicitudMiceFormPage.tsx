@@ -10,7 +10,7 @@ import {
   type EtapaMice,
 } from '../lib/etapasMice'
 import { buildClienteNombreById, fetchClientesZeppelinCatalog } from '@/lib/clientes'
-import ClienteSearchSelect from '@/components/ui/ClienteSearchSelect'
+import ClienteCustomSelect from '@/components/ui/ClienteCustomSelect'
 import { parseDecimalCO } from '@/lib/decimalFormat'
 import { useAuth } from '@/context/AuthContext'
 import { Card } from '@/components/ui/Card'
@@ -25,6 +25,8 @@ import Alert from '@/components/ui/Alert'
 import SaveFeedbackOverlay, { type SaveFeedbackState } from '@/components/ui/SaveFeedbackOverlay'
 import {
   INITIAL_FORM_MICE,
+  FACTURA_REGEX,
+  RECIBO_CAJA_REGEX,
   type SolicitudMiceForm,
   type SolicitudMiceEdit,
   type MonedaCotizacion,
@@ -43,7 +45,7 @@ import {
 import { resolveNextMzpCode } from '../services/mzpConsecutivoService'
 import { fetchMiceCatalogos } from '../services/miceCatalogosService'
 import DestinosMiceEditor from '../components/DestinosMiceEditor'
-import DocumentosMiceEditor from '../components/DocumentosMiceEditor'
+import FacturasMiceEditor from '../components/FacturasMiceEditor'
 import LugarMiceSelect from '../components/LugarMiceSelect'
 import ServiciosMiceSelect from '../components/ServiciosMiceSelect'
 import SeguimientoMiceChat from '../components/SeguimientoMiceChat'
@@ -115,8 +117,19 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
     }
   }
 
-  if (seccionCierre && form.documentos.length === 0) {
-    e.documentos = 'Agregue al menos un documento (factura o recibo de caja).'
+  if (seccionCierre) {
+    if (form.facturas.length === 0) {
+      e.facturas = 'Agregue al menos una factura.'
+    } else {
+      const numeros = form.facturas.map(f => f.numero.trim().toUpperCase())
+      if (numeros.some(n => !FACTURA_REGEX.test(n))) {
+        e.facturas = 'Hay facturas con formato inválido. Ej: ABCD1234'
+      } else if (new Set(numeros).size !== numeros.length) {
+        e.facturas = 'Hay facturas duplicadas.'
+      } else if (form.facturas.some(f => f.recibo_caja_numero && !RECIBO_CAJA_REGEX.test(f.recibo_caja_numero.trim().toUpperCase()))) {
+        e.facturas = 'Hay recibos de caja con formato inválido. Ej: AB1234'
+      }
+    }
   }
 
   if (seccionOperacion) {
@@ -272,10 +285,10 @@ export default function SolicitudMiceFormPage({
     }
     // Para avanzar a en_cierre o cerrado: al menos un documento
     if (siguiente === 'en_cierre' || siguiente === 'cerrado') {
-      return form.documentos.length > 0
+      return form.facturas.length > 0
     }
     return true
-  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real, form.documentos])
+  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real, form.facturas])
 
   useEffect(() => {
     if (saveFeedback?.status !== 'success') return
@@ -727,7 +740,7 @@ const estadoOptions = useMemo(() => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <FormField label="Cliente" required htmlFor="cliente_id" error={errors.cliente_id}
                   className="sm:col-span-2 lg:col-span-2 min-w-0">
-                  <ClienteSearchSelect
+                  <ClienteCustomSelect
                     value={form.cliente_id}
                     onChange={(id, fullname) => {
                       setForm(prev => ({ ...prev, cliente_id: id, cliente: fullname }))
@@ -1104,13 +1117,13 @@ const estadoOptions = useMemo(() => {
             description="Facturas y recibos de caja del evento"
           >
             <FormField
-              label="Documentos"
-              error={errors.documentos}
+              label="Facturas y recibos de caja"
+              error={errors.facturas}
               required={siguienteEtapa(etapaActual ?? 'en_cierre') === 'cerrado'}
             >
-              <DocumentosMiceEditor
-                value={form.documentos}
-                onChange={docs => set('documentos', docs)}
+              <FacturasMiceEditor
+                value={form.facturas}
+                onChange={facturas => set('facturas', facturas)}
                 readOnly={effectiveLock}
               />
             </FormField>

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
-export type UserRole = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador'
+export type UserRole = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero'
 export type UnidadSlug = 'mice' | 'corp' | 'siigo'
 
 export interface Permissions {
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
   }, [user])
 
-  const VALID_ROLES: UserRole[] = ['admin', 'coordinador', 'asesor', 'tiqueteador']
+  const VALID_ROLES: UserRole[] = ['admin', 'coordinador', 'asesor', 'tiqueteador', 'financiero']
   const rawRole = user?.app_metadata?.role
   const role: UserRole = VALID_ROLES.includes(rawRole) ? rawRole : 'tiqueteador'
   const permissions = derivePermissions(role)
@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       coordinador: ['ver', 'crear', 'editar'],
       asesor:      ['ver', 'editar'],
       tiqueteador: ['ver'],
+      financiero:  [],
     }
     return permisosPorRol[role]?.includes(permiso) ?? false
   }

@@ -162,21 +162,26 @@ export function buildAuditoriaMiceObservacion(
   lineas.push(
     ...diffListaAuditoria(
       'Facturas',
-      antes.documentos.filter(d => d.tipo === 'factura'),
-      despues.documentos.filter(d => d.tipo === 'factura'),
-      d => d.numero,
-      d => d.numero
+      antes.facturas,
+      despues.facturas,
+      f => f.numero,
+      f => f.numero
     )
   )
-  lineas.push(
-    ...diffListaAuditoria(
-      'Recibos de caja',
-      antes.documentos.filter(d => d.tipo === 'recibo_caja'),
-      despues.documentos.filter(d => d.tipo === 'recibo_caja'),
-      d => d.numero,
-      d => d.numero
-    )
-  )
+
+  for (const fAntes of antes.facturas) {
+    const fDespues = despues.facturas.find(f => f.numero === fAntes.numero)
+    if (!fDespues) continue
+    if (fAntes.recibo_caja_numero !== fDespues.recibo_caja_numero) {
+      push(
+        lineaModificado(
+          `Recibo de caja de factura ${fAntes.numero}`,
+          fAntes.recibo_caja_numero ?? VACIO_AUDITORIA,
+          fDespues.recibo_caja_numero ?? VACIO_AUDITORIA
+        )
+      )
+    }
+  }
 
   if (lineas.length === 0) return null
   return lineas.join('\n')

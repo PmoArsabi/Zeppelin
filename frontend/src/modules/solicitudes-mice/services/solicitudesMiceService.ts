@@ -20,7 +20,7 @@ import { buildAuditoriaMiceCreacion, buildAuditoriaMiceObservacion } from '@/lib
 import { registrarAuditoriaEdicion } from '@/lib/auditoria/logAuditoriaService'
 import { fetchMiceCatalogos } from './miceCatalogosService'
 import { resolveNextMzpCode } from './mzpConsecutivoService'
-import { buildClienteNombreById, fetchClientesZeppelinCatalog } from '@/lib/clientes'
+import { buildClienteNombreById, fetchClientesByIds } from '@/lib/clientes'
 import { formatSectorNombre } from '../lib/formatSectorMice'
 import {
   pickEstadoIdForSave,
@@ -209,7 +209,7 @@ export function rowToForm(
     probabilidad: enriched.probabilidad ?? '',
     valor_final_aprobado: enriched.valor_final_aprobado != null ? formatDecimalCO(enriched.valor_final_aprobado) : '',
     utilidad_real: enriched.utilidad_real != null ? formatDecimalCO(enriched.utilidad_real) : '',
-    documentos: relaciones?.documentos ?? [],
+    facturas: relaciones?.facturas ?? [],
   }
 }
 
@@ -232,9 +232,15 @@ export async function listSolicitudesMice(
     .order('created_at', { ascending: false })
   if (error) return { data: null, error: error.message }
 
+  const clienteIds = Array.from(new Set(
+    (data as SolicitudMiceRowDb[])
+      .map(r => r.cliente_id)
+      .filter((id): id is number => id != null)
+  ))
+
   const [{ data: catalogData }, { data: clientesCatalog }, profileNombreById] = await Promise.all([
     fetchMiceCatalogos(),
-    fetchClientesZeppelinCatalog(),
+    fetchClientesByIds(clienteIds),
     fetchProfileNombreById(),
   ])
   const clienteNombreById = buildClienteNombreById(clientesCatalog)

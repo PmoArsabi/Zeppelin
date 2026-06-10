@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { DestinoMice, DocumentoMice, SolicitudMiceForm } from '../types'
+import type { DestinoMice, FacturaMice, SolicitudMiceForm } from '../types'
 import type { MiceCatalogos } from '../types/mice-catalogos'
 import { destinosToDbColumns } from '../lib/destinosMice'
 import { lugaresToDb } from '../lib/lugaresMice'
@@ -9,7 +9,7 @@ export interface SolicitudMiceRelaciones {
   servicios: string[]
   destinos: DestinoMice[]
   lugares: string[]
-  documentos: DocumentoMice[]
+  facturas: FacturaMice[]
 }
 
 function resolveDestinoIds(
@@ -49,15 +49,16 @@ export async function fetchSolicitudRelaciones(
       .eq('solicitud_id', solicitudId),
     supabase
       .from('th_solicitud_mice_documentos')
-      .select('tipo, numero')
+      .select('numero, th_solicitud_mice_recibos_caja(numero)')
       .eq('solicitud_id', solicitudId)
+      .eq('tipo', 'factura')
       .order('created_at'),
   ])
 
   const err = servRes.error ?? destRes.error ?? lugRes.error ?? docRes.error
   if (err) {
     return {
-      data: { servicios: [], destinos: [], lugares: [], documentos: [] },
+      data: { servicios: [], destinos: [], lugares: [], facturas: [] },
       error: err.message,
     }
   }
@@ -92,12 +93,18 @@ export async function fetchSolicitudRelaciones(
     .sort((a, b) => a.orden - b.orden)
     .map(l => l.nombre)
 
-  const documentos: DocumentoMice[] = (docRes.data ?? []).map(r => {
-    const d = r as { tipo: DocumentoMice['tipo']; numero: string }
-    return { tipo: d.tipo, numero: d.numero }
+  const facturas: FacturaMice[] = (docRes.data ?? []).map(row => {
+    const r = row as {
+      numero: string
+      th_solicitud_mice_recibos_caja: { numero: string } | { numero: string }[] | null
+    }
+    const recibo = Array.isArray(r.th_solicitud_mice_recibos_caja)
+      ? r.th_solicitud_mice_recibos_caja[0]
+      : r.th_solicitud_mice_recibos_caja
+    return { numero: r.numero, recibo_caja_numero: recibo?.numero ?? null }
   })
 
-  return { data: { servicios, destinos, lugares, documentos }, error: null }
+  return { data: { servicios, destinos, lugares, facturas }, error: null }
 }
 
 async function deleteRelaciones(solicitudId: string): Promise<string | null> {
@@ -106,6 +113,7 @@ async function deleteRelaciones(solicitudId: string): Promise<string | null> {
     'th_solicitud_mice_destinos',
     'th_solicitud_mice_lugares',
     'th_solicitud_mice_documentos',
+    'th_solicitud_mice_recibos_caja',
   ] as const
 
   for (const table of tables) {
@@ -167,13 +175,36 @@ export async function syncSolicitudRelaciones(
     }
   }
 
-  if (form.documentos.length > 0) {
-    const rows = form.documentos.map(d => ({
-      solicitud_id: solicitudId,
-      tipo: d.tipo,
-      numero: d.numero.toUpperCase().trim(),
-    }))
-    const { error } = await supabase.from('th_solicitud_mice_documentos').insert(rows)
+  if (form.facturas.length > 0) {
+    const recibosNumeros = Array.from(new Set(
+      form.facturas
+        .map(f => f.recibo_caja_numero?.toUpperCase().trim())
+        .filter((n): n is string => Boolean(n))
+    ))
+
+    const reciboIdByNumero = new Map<string, string>()
+    if (recibosNumeros.length > 0) {
+      const rows = recibosNumeros.map(numero => ({ solicitud_id: solicitudId, numero }))
+      const { data, error } = await supabase
+        .from('th_solicitud_mice_recibos_caja')
+        .insert(rows)
+        .select('id, numero')
+      if (error) return { error: error.message }
+      for (const r of (data ?? []) as { id: string; numero: string }[]) {
+        reciboIdByNumero.set(r.numero, r.id)
+      }
+    }
+
+    const docRows = form.facturas.map(f => {
+      const reciboNumero = f.recibo_caja_numero?.toUpperCase().trim() || null
+      return {
+        solicitud_id: solicitudId,
+        tipo: 'factura' as const,
+        numero: f.numero.toUpperCase().trim(),
+        recibo_caja_id: reciboNumero ? reciboIdByNumero.get(reciboNumero) ?? null : null,
+      }
+    })
+    const { error } = await supabase.from('th_solicitud_mice_documentos').insert(docRows)
     if (error) return { error: error.message }
   }
 

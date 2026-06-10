@@ -31,6 +31,7 @@ const ROL_LABELS: Record<string, string> = {
   coordinador: 'Coordinador',
   asesor:      'Asesor',
   tiqueteador: 'Tiqueteador',
+  financiero:  'Financiero',
 }
 
 interface Props { onNavigate: NavigateFn }

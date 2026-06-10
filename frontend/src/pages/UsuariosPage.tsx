@@ -21,19 +21,21 @@ interface UserRow {
   unidades: string[]
 }
 
-type RoleOption = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador'
-type UnidadSlug = 'mice' | 'corp'
+type RoleOption = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero'
+type UnidadSlug = 'mice' | 'corp' | 'siigo'
 
 const ROLE_OPTIONS: { value: RoleOption; label: string }[] = [
   { value: 'admin',        label: 'Administrador' },
   { value: 'coordinador',  label: 'Coordinador' },
   { value: 'asesor',       label: 'Asesor' },
   { value: 'tiqueteador',  label: 'Tiqueteador' },
+  { value: 'financiero',   label: 'Financiero' },
 ]
 
 const UNIDAD_OPTIONS: { value: UnidadSlug; label: string }[] = [
   { value: 'mice', label: 'MICE' },
   { value: 'corp', label: 'Corporativo' },
+  { value: 'siigo', label: 'Carga Siigo' },
 ]
 
 interface NewUserForm {
@@ -389,12 +391,14 @@ const roleBadge = (role: string) =>
     coordinador:  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">Coordinador</span>,
     asesor:       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">Asesor</span>,
     tiqueteador:  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">Tiqueteador</span>,
+    financiero:   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">Financiero</span>,
   } as Record<string, React.ReactNode>)[role] ?? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-slate-400">{role}</span>
 
-const UNIDAD_LABELS: Record<string, string> = { mice: 'MICE', corp: 'Corp' }
+const UNIDAD_LABELS: Record<string, string> = { mice: 'MICE', corp: 'Corp', siigo: 'Siigo' }
 const UNIDAD_COLORS: Record<string, string> = {
   mice: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300',
   corp: 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300',
+  siigo: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300',
 }
 
 const unidadesBadges = (unidades: string[]) => {
