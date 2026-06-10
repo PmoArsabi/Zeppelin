@@ -4,6 +4,12 @@ interface BadgeProps {
   variant?: BadgeVariant
   children: React.ReactNode
   className?: string
+  /** Color de texto/borde personalizado (hex). Si se indica, ignora `variant`. */
+  colorHex?: string
+  /** Color de fondo personalizado (claro). Requiere `colorHex`. */
+  bgHex?: string
+  /** Color de fondo personalizado (oscuro). Requiere `colorHex`. */
+  bgHexDark?: string
 }
 
 const variants: Record<BadgeVariant, string> = {
@@ -15,7 +21,23 @@ const variants: Record<BadgeVariant, string> = {
   violet:  'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/20',
 }
 
-export default function Badge({ variant = 'slate', children, className = '' }: BadgeProps) {
+export default function Badge({ variant = 'slate', children, className = '', colorHex, bgHex, bgHexDark }: BadgeProps) {
+  if (colorHex) {
+    return (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset dark:bg-(--badge-bg-dark) ${className}`}
+        style={{
+          color: colorHex,
+          borderColor: colorHex,
+          backgroundColor: bgHex,
+          ['--badge-bg-dark' as string]: bgHexDark ?? bgHex,
+        }}
+      >
+        {children}
+      </span>
+    )
+  }
+
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset ${variants[variant]} ${className}`}>
       {children}

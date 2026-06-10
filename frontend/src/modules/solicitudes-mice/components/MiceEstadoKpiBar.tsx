@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react'
 import EstadoKpiBar, { buildEstadoKpiItems, type EstadoKpiItem } from '@/components/filters/EstadoKpiBar'
 import type { BadgeVariant } from '@/components/ui/Badge'
+import { estadoColor } from '../lib/estadoColors'
 
 export type { EstadoKpiItem }
 // eslint-disable-next-line react-refresh/only-export-components
@@ -27,7 +28,7 @@ function miceBadgeVariant(estado: string): BadgeVariant {
 type Props = Omit<ComponentProps<typeof EstadoKpiBar>, 'badgeVariant'>
 
 export default function MiceEstadoKpiBar(props: Props) {
-  return <EstadoKpiBar {...props} badgeVariant={miceBadgeVariant} />
+  return <EstadoKpiBar {...props} badgeVariant={miceBadgeVariant} estadoAccent={estadoColor} />
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

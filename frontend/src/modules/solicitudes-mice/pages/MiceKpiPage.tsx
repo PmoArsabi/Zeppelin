@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Alert from '@/components/ui/Alert'
-import Badge, { type BadgeVariant } from '@/components/ui/Badge'
+import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import FilterMultiSelect from '@/components/filters/FilterMultiSelect'
 import FilterSearchField from '@/components/filters/FilterSearchField'
@@ -8,6 +8,7 @@ import MiceEstadoKpiBar, { buildMiceEstadoKpiItems } from '../components/MiceEst
 import { listSolicitudesMice } from '../services/solicitudesMiceService'
 import type { SolicitudMiceRow } from '../types'
 import type { MiceFilters } from './SolicitudesMiceListPage'
+import { estadoColor } from '../lib/estadoColors'
 
 interface Props {
   /** Cuando el usuario hace clic en una celda, aplica filtros en la tab lista */
@@ -43,15 +44,6 @@ function sortEstados(estados: string[]): string[] {
 function rowResponsable(row: SolicitudMiceRow) { return row.responsable_nombre?.trim() || 'Sin responsable' }
 function rowEstado(row: SolicitudMiceRow)      { return row.estado?.trim() || 'Sin estado' }
 function rowAnio(row: SolicitudMiceRow)        { return String(row.anio || row.fecha_solicitud?.slice(0, 4) || 'Sin año') }
-
-function estadoVariant(estado: string): BadgeVariant {
-  const n = estado.toLowerCase()
-  if (n.includes('operación') || n.includes('operacion')) return 'emerald'
-  if (n.includes('cierre'))  return 'violet'
-  if (n.includes('cotización') || n.includes('cotizacion')) return 'blue'
-  if (n.includes('enviada')) return 'amber'
-  return 'slate'
-}
 
 function matchesFilters(row: SolicitudMiceRow, f: KpiFilters): boolean {
   if (f.anios.length && !f.anios.includes(rowAnio(row))) return false
@@ -386,7 +378,12 @@ export default function MiceKpiPage({ onDrillToList }: Props) {
                       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{row.nombre}</p>
                       <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{row.cliente} · {rowResponsable(row)}</p>
                     </div>
-                    <Badge variant={estadoVariant(rowEstado(row))} className="shrink-0 text-[10px]">
+                    <Badge
+                      colorHex={estadoColor(rowEstado(row)).hex}
+                      bgHex={estadoColor(rowEstado(row)).bg}
+                      bgHexDark={estadoColor(rowEstado(row)).bgDark}
+                      className="shrink-0 text-[10px]"
+                    >
                       {rowEstado(row)}
                     </Badge>
                   </div>

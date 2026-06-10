@@ -14,6 +14,7 @@ import type { MiceCatalogos } from '../types/mice-catalogos'
 import { MICE_CATALOGOS_VACIOS } from '../types/mice-catalogos'
 import { formatDateDDMMYYYY } from '@/lib/formatDate'
 import MiceEstadoKpiBar, { buildMiceEstadoKpiItems } from '../components/MiceEstadoKpiBar'
+import { estadoColor } from '../lib/estadoColors'
 
 // ── KPI Matrix helpers ────────────────────────────────────────────────────────
 
@@ -34,18 +35,28 @@ function rowResponsable(row: SolicitudMiceRow) { return row.responsable_nombre?.
 function rowEstado(row: SolicitudMiceRow)      { return row.estado?.trim() || 'Sin estado' }
 function rowAnio(row: SolicitudMiceRow)        { return String(row.anio || row.fecha_solicitud?.slice(0, 4) || 'Sin año') }
 
-const ESTADOS_CON_ALERTA_SEGUIMIENTO = ['cotizacion_enviada', 'seguimiento']
 const DIAS_ALERTA = 3
+const DIAS_ALERTA_SEGUIMIENTO = 2
 
-/** Retorna true si la solicitud lleva más de 3 días sin actividad en estados que requieren seguimiento */
-function necesitaSeguimiento(row: SolicitudMiceRow): boolean {
+const DIAS_ALERTA_POR_ETAPA: Record<string, number> = {
+  cotizacion_enviada: DIAS_ALERTA,
+  seguimiento: DIAS_ALERTA_SEGUIMIENTO,
+}
+
+function diasAlertaParaRow(row: SolicitudMiceRow): number | null {
   const etapaCodigo = row.estado?.toLowerCase().replace(/\s+/g, '_')
     .replace(/ó/g, 'o').replace(/ú/g, 'u').replace(/é/g, 'e').replace(/á/g, 'a').replace(/í/g, 'i')
-  if (!ESTADOS_CON_ALERTA_SEGUIMIENTO.includes(etapaCodigo ?? '')) return false
+  return DIAS_ALERTA_POR_ETAPA[etapaCodigo ?? ''] ?? null
+}
+
+/** Retorna true si la solicitud lleva más días sin actividad de los permitidos para su etapa */
+function necesitaSeguimiento(row: SolicitudMiceRow): boolean {
+  const dias = diasAlertaParaRow(row)
+  if (dias == null) return false
   const ref = row.updated_at
   if (!ref) return false
   const diasSinActividad = (Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24)
-  return diasSinActividad > DIAS_ALERTA
+  return diasSinActividad > dias
 }
 
 
@@ -349,12 +360,6 @@ function fmtMoney(n: number | null, currency = 'COP'): string {
   return `${code} ${amount}`
 }
 
-function estadoBadgeVariant(estado: string): 'emerald' | 'rose' | 'amber' {
-  if (estado === 'Cerrado') return 'emerald'
-  if (estado === 'Cancelado') return 'rose'
-  return 'amber'
-}
-
 function matchesFilters(row: SolicitudMiceRow, f: MiceFilters): boolean {
   if (f.cliente.length && !matchesMulti(f.cliente, row.cliente ?? '')) return false
   if (!matchesMulti(f.responsable, (row.responsable_nombre ?? '').trim())) return false
@@ -581,12 +586,17 @@ function MiceSolicitudMobileCard({
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <Badge variant={estadoBadgeVariant(row.estado)} className="text-[10px] px-1.5 py-0 max-w-[45%] truncate">
+          <Badge
+            colorHex={estadoColor(row.estado).hex}
+            bgHex={estadoColor(row.estado).bg}
+            bgHexDark={estadoColor(row.estado).bgDark}
+            className="text-[10px] px-1.5 py-0 max-w-[45%] truncate"
+          >
             {row.estado}
           </Badge>
           {alerta && (
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
-              +{DIAS_ALERTA}d sin actividad
+              +{diasAlertaParaRow(row)}d sin actividad
             </span>
           )}
         </div>
@@ -829,7 +839,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                       key={row.id}
                       className={`border-b border-slate-50 dark:border-gray-800/80 hover:bg-slate-50/80 dark:hover:bg-gray-800/40
                         ${alerta ? 'bg-rose-50/60 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20' : ''}`}
-                      title={alerta ? `Sin actividad hace más de ${DIAS_ALERTA} días` : undefined}
+                      title={alerta ? `Sin actividad hace más de ${diasAlertaParaRow(row)} días` : undefined}
                     >
                       <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
                         {formatDateDDMMYYYY(row.fecha_solicitud)}
@@ -855,12 +865,17 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                       <td className={`${TD} text-slate-500 whitespace-nowrap`}>{row.probabilidad ?? '—'}</td>
                       <td className={TD}>
                         <div className="flex flex-col gap-1">
-                          <Badge variant={estadoBadgeVariant(row.estado)} className="text-[10px] px-1.5 py-0">
+                          <Badge
+                            colorHex={estadoColor(row.estado).hex}
+                            bgHex={estadoColor(row.estado).bg}
+                            bgHexDark={estadoColor(row.estado).bgDark}
+                            className="text-[10px] px-1.5 py-0"
+                          >
                             {row.estado}
                           </Badge>
                           {alerta && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 whitespace-nowrap">
-                              +{DIAS_ALERTA}d sin actividad
+                              +{diasAlertaParaRow(row)}d sin actividad
                             </span>
                           )}
                         </div>

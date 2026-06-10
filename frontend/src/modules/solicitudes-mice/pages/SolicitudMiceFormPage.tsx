@@ -968,7 +968,7 @@ const estadoOptions = useMemo(() => {
                   required={mostrarSeccionCotizacion(etapaActual)}
                   optional={!mostrarSeccionCotizacion(etapaActual)}
                   error={errors.valor_cotizado}
-                  className="sm:col-span-1 lg:col-span-4 min-w-0"
+                  className="sm:col-span-1 lg:col-span-3 min-w-0"
                 >
                   <div className="flex gap-2 min-w-0">
                     <div className="w-24 shrink-0">
@@ -997,7 +997,7 @@ const estadoOptions = useMemo(() => {
                   required={mostrarSeccionCotizacion(etapaActual)}
                   optional={!mostrarSeccionCotizacion(etapaActual)}
                   error={errors.utilidad_proyectada}
-                  className="sm:col-span-1 lg:col-span-4 min-w-0"
+                  className="sm:col-span-1 lg:col-span-3 min-w-0"
                 >
                   <DecimalInput
                     id="utilidad"
@@ -1007,6 +1007,24 @@ const estadoOptions = useMemo(() => {
                     error={!!errors.utilidad_proyectada}
                     disabled={effectiveLock || lockCotizacionFields}
                   />
+                </FormField>
+                <FormField
+                  label="% Ganancia proyectada"
+                  className="sm:col-span-1 lg:col-span-2 min-w-0"
+                >
+                  {(() => {
+                    const vc = parseDecimalCO(form.valor_cotizado)
+                    const up = parseDecimalCO(form.utilidad_proyectada)
+                    if (vc == null || up == null || vc === 0) {
+                      return <p className="text-sm text-slate-400 dark:text-slate-500 py-2">—</p>
+                    }
+                    const pct = (up / vc) * 100
+                    return (
+                      <p className={`text-2xl font-bold py-1 ${pct >= 17 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        {pct.toFixed(1)}%
+                      </p>
+                    )
+                  })()}
                 </FormField>
                 <FormField
                   label="Probabilidad"

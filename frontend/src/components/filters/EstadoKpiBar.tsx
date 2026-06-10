@@ -55,6 +55,10 @@ interface KpiCardProps {
   icon: ReactNode
   title?: string
   onClick: () => void
+  /** Color de acento personalizado (hex) — sobrescribe valueClass/iconBoxClass/borde. */
+  accentHex?: string
+  accentBg?: string
+  accentBgDark?: string
 }
 
 function KpiCard({
@@ -68,7 +72,44 @@ function KpiCard({
   icon,
   title,
   onClick,
+  accentHex,
+  accentBg,
+  accentBgDark,
 }: KpiCardProps) {
+  if (accentHex) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={title ?? label}
+        className={`${CARD_BASE} text-left dark:bg-(--kpi-bg-dark) ${active ? 'ring-2' : ''}`}
+        style={{
+          backgroundColor: accentBg,
+          borderColor: accentHex,
+          ['--kpi-bg-dark' as string]: accentBgDark ?? accentBg,
+          ...(active ? ({ ['--tw-ring-color' as string]: accentHex }) : {}),
+        }}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] leading-tight truncate" style={{ color: accentHex }}>{label}</p>
+          <div className="flex items-baseline gap-1 mt-0.5">
+            <span className="text-lg font-bold tabular-nums leading-none" style={{ color: accentHex }}>{count}</span>
+            {pct != null && (
+              <span className="text-[9px] font-medium tabular-nums opacity-70" style={{ color: accentHex }}>{pct}</span>
+            )}
+          </div>
+        </div>
+        <div
+          className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center"
+          style={{ color: accentHex }}
+          aria-hidden
+        >
+          {icon}
+        </div>
+      </button>
+    )
+  }
+
   return (
     <button
       type="button"
@@ -101,6 +142,8 @@ interface Props {
   activeEstados: string[]
   badgeVariant: (estado: string) => BadgeVariant
   estadoIcon?: (nombre: string, variant: BadgeVariant) => ReactNode
+  /** Color de acento personalizado por estado (hex + fondos). Si se retorna, sobrescribe badgeVariant. */
+  estadoAccent?: (nombre: string) => { hex: string; bg: string; bgDark: string } | undefined
   filteredView?: boolean
   onToggleEstado: (nombre: string) => void
   onClearEstadoFilter: () => void
@@ -112,6 +155,7 @@ export default function EstadoKpiBar({
   activeEstados,
   badgeVariant,
   estadoIcon,
+  estadoAccent,
   filteredView = false,
   onToggleEstado,
   onClearEstadoFilter,
@@ -158,6 +202,7 @@ export default function EstadoKpiBar({
           const active = activeEstados.length === 1 && activeEstados[0] === nombre
           const variant = badgeVariant(nombre)
           const pct = total > 0 ? `${Math.round((count / total) * 100)}%` : undefined
+          const accent = estadoAccent?.(nombre)
           return (
             <KpiCard
               key={nombre}
@@ -171,6 +216,9 @@ export default function EstadoKpiBar({
               icon={renderIcon(nombre, variant)}
               title={`Filtrar por ${nombre}`}
               onClick={() => onToggleEstado(nombre)}
+              accentHex={accent?.hex}
+              accentBg={accent?.bg}
+              accentBgDark={accent?.bgDark}
             />
           )
         })}
