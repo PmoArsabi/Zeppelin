@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [unidades, setUnidades] = useState<UnidadSlug[]>([])
   const [displayName, setDisplayName] = useState('')
+  const [permisos, setPermisos] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -94,6 +95,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
   }, [user])
 
+  // Cargar permisos efectivos del usuario (rol x unidades) — admin no lo necesita (bypass)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!user) { setPermisos(new Set()); return }
+
+    const rawRole = user.app_metadata?.role
+    if (rawRole === 'admin') return
+
+    supabase
+      .rpc('rbac_get_mis_permisos')
+      .then(({ data }) => {
+        const set = new Set<string>(
+          (data ?? []).map((row: { unidad_slug: string; permiso_slug: string }) =>
+            `${row.unidad_slug}:${row.permiso_slug}`
+          )
+        )
+        setPermisos(set)
+      })
+  }, [user])
+
   const VALID_ROLES: UserRole[] = ['admin', 'coordinador', 'asesor', 'tiqueteador', 'financiero']
   const rawRole = user?.app_metadata?.role
   const role: UserRole = VALID_ROLES.includes(rawRole) ? rawRole : 'tiqueteador'
@@ -105,14 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function hasPermission(unidad: UnidadSlug, permiso: string): boolean {
     if (role === 'admin') return true
     if (!unidades.includes(unidad)) return false
-    const permisosPorRol: Record<UserRole, string[]> = {
-      admin:       ['ver', 'crear', 'editar', 'eliminar'],
-      coordinador: ['ver', 'crear', 'editar'],
-      asesor:      ['ver', 'editar'],
-      tiqueteador: ['ver'],
-      financiero:  [],
-    }
-    return permisosPorRol[role]?.includes(permiso) ?? false
+    return permisos.has(`${unidad}:${permiso}`)
   }
 
   const signOut = async () => { await supabase.auth.signOut() }
