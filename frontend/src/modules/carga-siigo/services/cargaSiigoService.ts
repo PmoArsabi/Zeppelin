@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { TipoDocumentoSiigo, FilaSiigo, FilaPresupuesto } from '../types/siigo'
+import { sincronizarPresupuestoDenorm } from './presupuestoDenormService'
 
 const TABLA: Record<TipoDocumentoSiigo, string> = {
   cuentas_pagar:   'th_siigo_cuentas_pagar',
@@ -120,6 +121,9 @@ export async function cargarPresupuesto(
 
   const { error: insError } = await supabase.from('th_siigo_presupuesto').insert(payload)
   if (insError) return { insertadas: 0, sobreescribio, error: insError.message }
+
+  // Sincronizar tabla desnormalizada td_presupuesto (desacoplado — fallo no bloquea la carga)
+  void sincronizarPresupuestoDenorm(anio, filas, userId)
 
   await supabase.from('th_siigo_log_cargas').insert({
     tipo_documento:   'presupuesto',
