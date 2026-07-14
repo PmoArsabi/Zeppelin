@@ -43,6 +43,7 @@ export default function AppShell({ children, activeModule = 'solicitudes-mice', 
     asesor:       'Asesor',
     tiqueteador:  'Tiqueteador',
     financiero:   'Financiero',
+    analista_bsp: 'Analista BSP',
   }
   const [mobileOpen, setMobileOpen] = useState(false)
 
