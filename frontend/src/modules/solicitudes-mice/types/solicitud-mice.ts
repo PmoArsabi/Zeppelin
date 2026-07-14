@@ -16,6 +16,11 @@ export interface FacturaMice {
   numero: string
   /** Número del recibo de caja asociado, o null si no tiene. */
   recibo_caja_numero: string | null
+  /**
+   * Estado deseado de anticipo (pendiente hasta guardar el formulario).
+   * Se persiste en raw.xmart_informe_acumulado_bks.anticipo al guardar el Cierre.
+   */
+  anticipo: boolean
 }
 
 export const FACTURA_REGEX = /^[A-Za-z]{1,4}\d{1,8}$/

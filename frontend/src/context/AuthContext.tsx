@@ -5,7 +5,7 @@ import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
 export type UserRole = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero'
-export type UnidadSlug = 'mice' | 'corp' | 'siigo'
+export type UnidadSlug = 'mice' | 'corp' | 'siigo' | 'anticipos'
 
 export interface Permissions {
   isAdmin: boolean

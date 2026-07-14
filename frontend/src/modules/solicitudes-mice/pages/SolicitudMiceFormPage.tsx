@@ -33,6 +33,7 @@ import {
 } from '../types'
 import type { MiceCatalogos } from '../types/mice-catalogos'
 import { MICE_CATALOGOS_VACIOS } from '../types/mice-catalogos'
+import { fetchFacturasAnticipo } from '../services/facturaAnticipoService'
 import {
   loadSolicitudForEdit,
   saveSolicitudMice,
@@ -140,6 +141,19 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
   }
 
   return e
+}
+
+/** Valida que las facturas del Cierre existan en raw.xmart_informe_acumulado_bks. */
+async function validateFacturasEnInforme(form: SolicitudMiceForm, seccionCierre: boolean): Promise<string | null> {
+  if (!seccionCierre || form.facturas.length === 0) return null
+  const numeros = form.facturas.map(f => f.numero.trim().toUpperCase())
+  const { data, error } = await fetchFacturasAnticipo(numeros)
+  if (error) return `No se pudo validar las facturas contra el informe acumulado: ${error}`
+  const faltantes = numeros.filter(n => !data.get(n)?.existe)
+  if (faltantes.length > 0) {
+    return `Las siguientes facturas no existen en el informe acumulado: ${faltantes.join(', ')}`
+  }
+  return null
 }
 
 type FormTabId = 'cotizacion' | 'seguimiento' | 'historial'
@@ -556,6 +570,13 @@ const estadoOptions = useMemo(() => {
       return
     }
 
+    const facturasError = await validateFacturasEnInforme(form, mostrarSeccionCierre(etapaActual))
+    if (facturasError) {
+      setErrors({ facturas: facturasError })
+      setActiveTab('cotizacion')
+      return
+    }
+
     setSaveFeedback({
       status: 'saving',
       title: isEdit ? 'Guardando cambios...' : 'Registrando solicitud MICE...',
@@ -622,6 +643,14 @@ const estadoOptions = useMemo(() => {
       setErrors(v)
       setActiveTab('cotizacion')
       setSubmitError(`Complete los campos requeridos para avanzar a "${labelEtapa(siguiente)}".`)
+      return
+    }
+
+    const facturasError = await validateFacturasEnInforme(formAvanzado, mostrarSeccionCierre(siguiente))
+    if (facturasError) {
+      setErrors({ facturas: facturasError })
+      setActiveTab('cotizacion')
+      setSubmitError(facturasError)
       return
     }
 

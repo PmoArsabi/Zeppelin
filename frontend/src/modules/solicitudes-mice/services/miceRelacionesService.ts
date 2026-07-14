@@ -4,6 +4,7 @@ import type { MiceCatalogos } from '../types/mice-catalogos'
 import { destinosToDbColumns } from '../lib/destinosMice'
 import { lugaresToDb } from '../lib/lugaresMice'
 import { serviciosToDb } from '../lib/serviciosMice'
+import { fetchFacturasAnticipo, setFacturaAnticipo } from './facturaAnticipoService'
 
 export interface SolicitudMiceRelaciones {
   servicios: string[]
@@ -93,7 +94,7 @@ export async function fetchSolicitudRelaciones(
     .sort((a, b) => a.orden - b.orden)
     .map(l => l.nombre)
 
-  const facturas: FacturaMice[] = (docRes.data ?? []).map(row => {
+  const facturasBase = (docRes.data ?? []).map(row => {
     const r = row as {
       numero: string
       th_solicitud_mice_recibos_caja: { numero: string } | { numero: string }[] | null
@@ -103,6 +104,12 @@ export async function fetchSolicitudRelaciones(
       : r.th_solicitud_mice_recibos_caja
     return { numero: r.numero, recibo_caja_numero: recibo?.numero ?? null }
   })
+
+  const { data: anticipoByFactura } = await fetchFacturasAnticipo(facturasBase.map(f => f.numero))
+  const facturas: FacturaMice[] = facturasBase.map(f => ({
+    ...f,
+    anticipo: anticipoByFactura.get(f.numero)?.anticipo ?? false,
+  }))
 
   return { data: { servicios, destinos, lugares, facturas }, error: null }
 }
@@ -206,6 +213,11 @@ export async function syncSolicitudRelaciones(
     })
     const { error } = await supabase.from('th_solicitud_mice_documentos').insert(docRows)
     if (error) return { error: error.message }
+
+    for (const f of form.facturas) {
+      const { error: anticipoError } = await setFacturaAnticipo(f.numero.toUpperCase().trim(), f.anticipo)
+      if (anticipoError) return { error: anticipoError }
+    }
   }
 
   return { error: null }

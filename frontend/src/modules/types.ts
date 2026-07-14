@@ -2,7 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 import type { UserRole, UnidadSlug } from '@/context/AuthContext'
 
 /** Identificador único de cada módulo de la app */
-export type ModuleId = 'solicitudes-corporativos' | 'solicitudes-mice' | 'usuarios' | 'roles-permisos' | 'carga-siigo'
+export type ModuleId = 'solicitudes-corporativos' | 'solicitudes-mice' | 'usuarios' | 'roles-permisos' | 'carga-siigo' | 'anticipos'
 
 export type NavigateFn = (moduleId: ModuleId) => void
 
