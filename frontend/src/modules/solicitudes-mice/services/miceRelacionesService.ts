@@ -133,7 +133,8 @@ async function deleteRelaciones(solicitudId: string): Promise<string | null> {
 export async function syncSolicitudRelaciones(
   solicitudId: string,
   form: SolicitudMiceForm,
-  catalog: MiceCatalogos
+  catalog: MiceCatalogos,
+  autorNombre: string
 ): Promise<{ error: string | null }> {
   const delErr = await deleteRelaciones(solicitudId)
   if (delErr) return { error: delErr }
@@ -214,9 +215,17 @@ export async function syncSolicitudRelaciones(
     const { error } = await supabase.from('th_solicitud_mice_documentos').insert(docRows)
     if (error) return { error: error.message }
 
-    for (const f of form.facturas) {
-      const { error: anticipoError } = await setFacturaAnticipo(f.numero.toUpperCase().trim(), f.anticipo)
-      if (anticipoError) return { error: anticipoError }
+    // Liberar (anticipo=true -> false) es exclusivo del módulo Anticipos; desde MICE solo se marca.
+    const facturasAMarcar = form.facturas.filter(f => f.anticipo)
+    if (facturasAMarcar.length > 0) {
+      const numerosFacturas = facturasAMarcar.map(f => f.numero.toUpperCase().trim())
+      const { data: estadoActual } = await fetchFacturasAnticipo(numerosFacturas)
+
+      for (const numero of numerosFacturas) {
+        if (estadoActual.get(numero)?.anticipo) continue
+        const { error: anticipoError } = await setFacturaAnticipo(numero, true, autorNombre)
+        if (anticipoError) return { error: anticipoError }
+      }
     }
   }
 

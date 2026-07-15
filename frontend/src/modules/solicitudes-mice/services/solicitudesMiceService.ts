@@ -308,7 +308,7 @@ export async function saveSolicitudMice(
   if (editId) {
     const { error } = await supabase.from(TABLE).update(payload).eq('id', editId)
     if (error) return { error: error.message }
-    const rel = await syncSolicitudRelaciones(editId, form, catalog)
+    const rel = await syncSolicitudRelaciones(editId, form, catalog, autorNombre)
     if (rel.error) return rel
 
     let auditWarning: string | null = null
@@ -331,7 +331,7 @@ export async function saveSolicitudMice(
   if (!data?.id) return { error: 'No se obtuvo el id de la solicitud creada.' }
 
   const newId = data.id as string
-  const rel = await syncSolicitudRelaciones(newId, form, catalog)
+  const rel = await syncSolicitudRelaciones(newId, form, catalog, autorNombre)
   if (rel.error) return rel
 
   const segText = primerSeguimiento?.trim()

@@ -153,6 +153,7 @@ async function validateFacturasEnInforme(form: SolicitudMiceForm, seccionCierre:
   if (faltantes.length > 0) {
     return `Las siguientes facturas no existen en el informe acumulado: ${faltantes.join(', ')}`
   }
+
   return null
 }
 

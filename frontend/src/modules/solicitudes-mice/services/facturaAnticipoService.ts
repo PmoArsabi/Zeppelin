@@ -37,14 +37,19 @@ export async function fetchFacturasAnticipo(
 /**
  * Marca (o desmarca) como anticipo las líneas elegibles de una factura.
  * Falla si la factura no existe o no tiene ninguna línea con producto clasificado como venta.
+ * Al liberar (anticipo=false) se requiere observacion no vacía.
  */
 export async function setFacturaAnticipo(
   numero: string,
-  anticipo: boolean
+  anticipo: boolean,
+  autor: string,
+  observacion?: string
 ): Promise<{ error: string | null }> {
   const { error } = await supabase.rpc('mice_set_factura_anticipo', {
     p_factura: numero,
     p_anticipo: anticipo,
+    p_autor: autor,
+    p_observacion: observacion ?? null,
   })
   return { error: error?.message ?? null }
 }

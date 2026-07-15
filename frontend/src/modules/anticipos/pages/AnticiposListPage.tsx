@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import PageTitle from '@/components/ui/PageTitle'
 import Alert from '@/components/ui/Alert'
-import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { useAuth } from '@/context/AuthContext'
 import { fetchAnticipos, liberarAnticipo, type AnticipoRow } from '../services/anticiposService'
 import MarcarFacturaAnticipoModal from '../components/MarcarFacturaAnticipoModal'
+import LiberarAnticipoDialog from '../components/LiberarAnticipoDialog'
+import { exportarAnticiposExcel } from '../lib/exportarAnticiposExcel'
 
 function fmtMoneda(v: number) {
   return new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v)
@@ -13,7 +15,9 @@ function fmtMoneda(v: number) {
 function TwoLines({ top, bottom }: { top: React.ReactNode; bottom?: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="text-slate-700 dark:text-slate-300 truncate">{top ?? '—'}</p>
+      {top !== null && (
+        <p className="text-slate-700 dark:text-slate-300 truncate">{top ?? '—'}</p>
+      )}
       {bottom && (
         <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate" title={typeof bottom === 'string' ? bottom : undefined}>
           {bottom}
@@ -24,6 +28,8 @@ function TwoLines({ top, bottom }: { top: React.ReactNode; bottom?: React.ReactN
 }
 
 export default function AnticiposListPage() {
+  const { displayName, user } = useAuth()
+  const autor = displayName || user?.email || 'Usuario'
   const [rows, setRows] = useState<AnticipoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,18 +63,18 @@ export default function AnticiposListPage() {
   }, [rows, busqueda])
 
   const totalGeneral = useMemo(() => filtradas.reduce((acc, r) => acc + (r.total_con_impuestos ?? 0), 0), [filtradas])
+  const facturasUnicas = useMemo(() => new Set(filtradas.map(r => r.factura)).size, [filtradas])
 
-  const handleLiberar = async (factura: string) => {
-    setFacturaAConfirmar(null)
-
+  const handleLiberar = async (factura: string, observacion: string) => {
     setLiberando(factura)
-    const { error } = await liberarAnticipo(factura)
+    const { error } = await liberarAnticipo(factura, autor, observacion)
     setLiberando(null)
 
     if (error) {
       setError(error)
       return
     }
+    setFacturaAConfirmar(null)
     setRows(prev => prev.filter(r => r.factura !== factura))
   }
 
@@ -106,6 +112,19 @@ export default function AnticiposListPage() {
             >
               Factura
             </button>
+            <button
+              type="button"
+              onClick={() => exportarAnticiposExcel(filtradas)}
+              disabled={filtradas.length === 0}
+              className="text-sm font-semibold uppercase tracking-wide px-4 py-2 rounded-lg
+                         border border-emerald-300 dark:border-emerald-700
+                         text-emerald-700 dark:text-emerald-400
+                         hover:bg-emerald-50 dark:hover:bg-emerald-900/30
+                         disabled:opacity-50 disabled:cursor-not-allowed
+                         transition-colors whitespace-nowrap"
+            >
+              Exportar a Excel
+            </button>
           </div>
 
           {loading ? (
@@ -140,46 +159,53 @@ export default function AnticiposListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filtradas.map((r, idx) => (
-                    <tr
-                      key={`${r.factura}-${idx}`}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors align-top"
-                    >
-                      <td className="px-3 py-2.5 max-w-40">
-                        <TwoLines
-                          top={<span className="font-mono font-semibold">{r.factura}</span>}
-                          bottom={r.producto}
-                        />
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <TwoLines top={r.fecha} bottom={r.nomofiventa} />
-                      </td>
-                      <td className="px-3 py-2.5 max-w-55">
-                        <TwoLines top={r.nomcliente} bottom={r.nompasajeros} />
-                      </td>
-                      <td className="px-3 py-2.5 max-w-55">
-                        <TwoLines top={r.observacion_fact} bottom={r.descripcion_item} />
-                      </td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-slate-800 dark:text-white whitespace-nowrap">
-                        {fmtMoneda(r.total_con_impuestos)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setFacturaAConfirmar(r.factura)}
-                          disabled={liberando === r.factura}
-                          className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-md
-                                     border border-emerald-300 dark:border-emerald-700
-                                     text-emerald-700 dark:text-emerald-400
-                                     hover:bg-emerald-50 dark:hover:bg-emerald-900/30
-                                     disabled:opacity-50 disabled:cursor-not-allowed
-                                     transition-colors"
-                        >
-                          {liberando === r.factura ? 'Liberando…' : 'Liberar'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtradas.map((r, idx) => {
+                    const esPrimeraDelGrupo = idx === 0 || filtradas[idx - 1].factura !== r.factura
+                    return (
+                      <tr
+                        key={`${r.factura}-${idx}`}
+                        className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors align-top ${
+                          esPrimeraDelGrupo ? 'border-t-2 border-t-slate-300 dark:border-t-slate-600' : ''
+                        }`}
+                      >
+                        <td className="px-3 py-2.5 max-w-40">
+                          <TwoLines
+                            top={esPrimeraDelGrupo ? <span className="font-mono font-semibold">{r.factura}</span> : null}
+                            bottom={r.producto}
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <TwoLines top={r.fecha} bottom={r.nomofiventa} />
+                        </td>
+                        <td className="px-3 py-2.5 max-w-55">
+                          <TwoLines top={r.nomcliente} bottom={r.nompasajeros} />
+                        </td>
+                        <td className="px-3 py-2.5 max-w-55">
+                          <TwoLines top={r.observacion_fact} bottom={r.descripcion_item} />
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-slate-800 dark:text-white whitespace-nowrap">
+                          {fmtMoneda(r.total_con_impuestos)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          {esPrimeraDelGrupo && (
+                            <button
+                              type="button"
+                              onClick={() => setFacturaAConfirmar(r.factura)}
+                              disabled={liberando === r.factura}
+                              className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-md
+                                         border border-emerald-300 dark:border-emerald-700
+                                         text-emerald-700 dark:text-emerald-400
+                                         hover:bg-emerald-50 dark:hover:bg-emerald-900/30
+                                         disabled:opacity-50 disabled:cursor-not-allowed
+                                         transition-colors"
+                            >
+                              {liberando === r.factura ? 'Liberando…' : 'Liberar'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -188,7 +214,7 @@ export default function AnticiposListPage() {
           {!loading && filtradas.length > 0 && (
             <div className="mt-3 flex items-center justify-between text-xs px-1">
               <span className="text-slate-500 dark:text-slate-400">
-                {filtradas.length} factura{filtradas.length === 1 ? '' : 's'}
+                {facturasUnicas} factura{facturasUnicas === 1 ? '' : 's'} ({filtradas.length} línea{filtradas.length === 1 ? '' : 's'})
               </span>
               <span className="font-semibold text-slate-800 dark:text-white">
                 Total: {fmtMoneda(totalGeneral)}
@@ -206,12 +232,10 @@ export default function AnticiposListPage() {
       )}
 
       {facturaAConfirmar && (
-        <ConfirmDialog
-          title="Liberar factura"
-          message={`¿Liberar la factura ${facturaAConfirmar}? Dejará de estar marcada como anticipo y volverá a contar como venta real.`}
-          confirmLabel="Liberar"
-          confirmColor="emerald"
-          onConfirm={() => handleLiberar(facturaAConfirmar)}
+        <LiberarAnticipoDialog
+          factura={facturaAConfirmar}
+          busy={liberando === facturaAConfirmar}
+          onConfirm={observacion => handleLiberar(facturaAConfirmar, observacion)}
           onCancel={() => setFacturaAConfirmar(null)}
         />
       )}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Alert from '@/components/ui/Alert'
+import { useAuth } from '@/context/AuthContext'
 import { buscarFactura, marcarAnticipo, type FacturaBusquedaResult } from '../services/anticiposService'
 
 interface Props {
@@ -7,11 +8,9 @@ interface Props {
   onMarcada: () => void
 }
 
-function fmtMoneda(v: number) {
-  return new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v)
-}
-
 export default function MarcarFacturaAnticipoModal({ onClose, onMarcada }: Props) {
+  const { displayName, user } = useAuth()
+  const autor = displayName || user?.email || 'Usuario'
   const [texto, setTexto] = useState('')
   const [buscando, setBuscando] = useState(false)
   const [resultados, setResultados] = useState<FacturaBusquedaResult[] | null>(null)
@@ -39,7 +38,7 @@ export default function MarcarFacturaAnticipoModal({ onClose, onMarcada }: Props
   const handleMarcar = async (factura: string) => {
     setMarcando(factura)
     setError(null)
-    const { error } = await marcarAnticipo(factura)
+    const { error } = await marcarAnticipo(factura, autor)
     setMarcando(null)
 
     if (error) {
@@ -73,7 +72,7 @@ export default function MarcarFacturaAnticipoModal({ onClose, onMarcada }: Props
               type="text"
               value={texto}
               onChange={e => setTexto(e.target.value)}
-              placeholder="Ej. FEGZ913"
+              placeholder="Ej. FEGZ913 (número exacto)"
               autoFocus
               className="flex-1 font-mono text-sm rounded-lg border px-3 py-2
                          bg-white dark:bg-slate-900 text-slate-900 dark:text-white
@@ -96,24 +95,19 @@ export default function MarcarFacturaAnticipoModal({ onClose, onMarcada }: Props
           {resultados !== null && (
             resultados.length === 0 ? (
               <p className="text-sm text-slate-400 dark:text-slate-500 italic text-center py-4">
-                No se encontraron facturas que empiecen por "{texto.trim()}".
+                No se encontró la factura "{texto.trim()}".
               </p>
             ) : (
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 max-h-100 overflow-y-auto">
                 {resultados.map(r => (
                   <div key={r.factura} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                    <div className="min-w-0">
-                      <p className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">{r.factura}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                        {r.nomcliente ?? '—'} · {r.fecha ?? '—'} · {fmtMoneda(r.totalConImpuestos)}
-                      </p>
-                    </div>
+                    <p className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">{r.factura}</p>
 
                     {r.anticipo ? (
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">
                         Ya es anticipo
                       </span>
-                    ) : !r.tieneLineaElegible ? (
+                    ) : !r.tiene_linea_elegible ? (
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-500 dark:text-rose-400 whitespace-nowrap">
                         Sin productos de venta clasificados
                       </span>

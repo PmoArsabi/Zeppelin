@@ -19,6 +19,7 @@ export interface FacturaMice {
   /**
    * Estado deseado de anticipo (pendiente hasta guardar el formulario).
    * Se persiste en raw.xmart_informe_acumulado_bks.anticipo al guardar el Cierre.
+   * Solo puede pasar de false a true desde MICE — liberar (true a false) es exclusivo del módulo Anticipos.
    */
   anticipo: boolean
 }

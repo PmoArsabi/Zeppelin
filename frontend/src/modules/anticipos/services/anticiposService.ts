@@ -41,56 +41,39 @@ export async function fetchAnticipos(): Promise<{ data: AnticipoRow[]; error: st
   })
 }
 
-export async function liberarAnticipo(factura: string): Promise<{ error: string | null }> {
+export async function liberarAnticipo(
+  factura: string,
+  autor: string,
+  observacion: string
+): Promise<{ error: string | null }> {
   const { error } = await supabase.rpc('mice_set_factura_anticipo', {
     p_factura: factura,
     p_anticipo: false,
+    p_autor: autor,
+    p_observacion: observacion,
   })
   return { error: error?.message ?? null }
 }
 
 export interface FacturaBusquedaResult {
   factura: string
-  fecha: string | null
-  nomcliente: string | null
-  estadobk: string | null
-  tieneLineaElegible: boolean
+  tiene_linea_elegible: boolean
   anticipo: boolean
-  totalConImpuestos: number
 }
 
 export async function buscarFactura(texto: string): Promise<{ data: FacturaBusquedaResult[]; error: string | null }> {
   return conReintentoPorTimeout(async () => {
     const { data, error } = await supabase.rpc('anticipos_buscar_factura', { p_texto: texto })
     if (error) return { data: [], error: error.message }
-    const rows = (data ?? []) as {
-      factura: string
-      fecha: string | null
-      nomcliente: string | null
-      estadobk: string | null
-      tiene_linea_elegible: boolean
-      anticipo: boolean
-      total_con_impuestos: number
-    }[]
-    return {
-      data: rows.map(r => ({
-        factura: r.factura,
-        fecha: r.fecha,
-        nomcliente: r.nomcliente,
-        estadobk: r.estadobk,
-        tieneLineaElegible: r.tiene_linea_elegible,
-        anticipo: r.anticipo,
-        totalConImpuestos: r.total_con_impuestos,
-      })),
-      error: null,
-    }
+    return { data: (data ?? []) as FacturaBusquedaResult[], error: null }
   })
 }
 
-export async function marcarAnticipo(factura: string): Promise<{ error: string | null }> {
+export async function marcarAnticipo(factura: string, autor: string): Promise<{ error: string | null }> {
   const { error } = await supabase.rpc('mice_set_factura_anticipo', {
     p_factura: factura,
     p_anticipo: true,
+    p_autor: autor,
   })
   return { error: error?.message ?? null }
 }

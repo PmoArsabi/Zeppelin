@@ -131,16 +131,23 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
                         <span className="text-rose-500 dark:text-rose-400">No existe en informe acumulado</span>
                       ) : !estado.tieneLineaElegible ? (
                         <span className="text-rose-500 dark:text-rose-400">Sin productos de venta clasificados</span>
-                      ) : readOnly ? (
-                        <span
-                          className={
-                            f.anticipo
-                              ? 'font-medium text-amber-600 dark:text-amber-400'
-                              : 'text-slate-500 dark:text-slate-400'
-                          }
-                        >
-                          {f.anticipo ? 'Sí' : 'No'}
-                        </span>
+                      ) : readOnly || estado.anticipo ? (
+                        <div>
+                          <span
+                            className={
+                              f.anticipo
+                                ? 'font-medium text-amber-600 dark:text-amber-400'
+                                : 'text-slate-500 dark:text-slate-400'
+                            }
+                          >
+                            {f.anticipo ? 'Sí' : 'No'}
+                          </span>
+                          {estado.anticipo && !readOnly && (
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                              Solo puede liberarse desde el módulo Anticipos.
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <Switch
                           checked={f.anticipo}
