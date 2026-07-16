@@ -4,6 +4,7 @@ import Button from '@/components/ui/Button'
 import PageTitle from '@/components/ui/PageTitle'
 import Alert from '@/components/ui/Alert'
 import Badge from '@/components/ui/Badge'
+import Pagination from '@/components/ui/Pagination'
 import CollapsibleFilterPanel from '@/components/filters/CollapsibleFilterPanel'
 import FilterMultiSelect from '@/components/filters/FilterMultiSelect'
 import FilterSearchField from '@/components/filters/FilterSearchField'
@@ -361,7 +362,24 @@ function matchesMulti(selected: string[], rowValue: string): boolean {
 
 const TH =
   'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap'
-const TD = 'px-3 py-1.5 text-[11px] leading-snug text-slate-600 dark:text-slate-300'
+const TD = 'px-3 py-2.5 text-[11px] leading-snug text-slate-600 dark:text-slate-300 align-top'
+
+const PAGE_SIZE = 20
+
+function TwoLines({ top, bottom }: { top: React.ReactNode; bottom?: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      {top !== null && (
+        <p className="text-slate-700 dark:text-slate-300 truncate">{top ?? '—'}</p>
+      )}
+      {bottom !== null && bottom !== undefined && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+          {bottom}
+        </p>
+      )}
+    </div>
+  )
+}
 
 /** Moneda + valor, ej. COP 1.250.000 */
 function fmtMoney(n: number | null, currency = 'COP'): string {
@@ -671,6 +689,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<MiceFilters>({ ...EMPTY_FILTERS, ...initialFilters })
   const [catalog, setCatalog] = useState<MiceCatalogos>(MICE_CATALOGOS_VACIOS)
+  const [page, setPage] = useState(1)
   const [matrixExpanded, setMatrixExpanded] = useState(() => {
     const s = localStorage.getItem('zeppelin.mice.matrix.expanded')
     return s === null ? false : s === 'true'
@@ -739,6 +758,18 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
   }, [rows, filters])
 
   const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1)
+  }, [filters, rows])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  )
 
   const estadoKpis = useMemo(() => buildMiceEstadoKpiItems(filtered), [filtered])
 
@@ -833,23 +864,20 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
         ) : (
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 shadow-sm overflow-hidden">
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-260 text-[11px]">
+              <table className="w-full min-w-220 text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-gray-800 text-left">
-                    <th className={TH}>Fecha solicitud</th>
-                    <th className={TH}>Cliente</th>
+                    <th className={TH}>Fecha / Solicitud</th>
+                    <th className={TH}>Cliente / Sector</th>
                     <th className={TH}>Responsable</th>
-                    <th className={TH}>Sector</th>
-                    <th className={TH}>MZP</th>
-                    <th className={`${TH} min-w-35`}>Nombre</th>
-                    <th className={TH}>Prob</th>
+                    <th className={`${TH} min-w-35`}>MZP / Nombre</th>
                     <th className={TH}>Estado</th>
                     <th className={`${TH} text-right`}>Valor cotizado</th>
                     <th className={`${TH} text-right`}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(row => {
+                  {paged.map(row => {
                     const alerta = necesitaSeguimiento(row)
                     const alertaCierre = necesitaPasarACierre(row)
                     return (
@@ -859,28 +887,24 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                         ${alerta || alertaCierre ? 'bg-rose-50/60 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20' : ''}`}
                       title={alerta ? `Sin actividad hace más de ${diasAlertaParaRow(row)} días` : alertaCierre ? 'La fecha del evento ya pasó — debe pasar a En cierre' : undefined}
                     >
-                      <td className={`${TD} text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
-                        {formatDateDDMMYYYY(row.fecha_solicitud)}
+                      <td className={`${TD} whitespace-nowrap`}>
+                        <TwoLines
+                          top={formatDateDDMMYYYY(row.fecha_solicitud)}
+                          bottom={row.probabilidad ? `Prob: ${row.probabilidad}` : null}
+                        />
                       </td>
-                      <td className={`${TD} max-w-40 truncate`} title={row.cliente}>
-                        {row.cliente}
+                      <td className={`${TD} max-w-45`}>
+                        <TwoLines top={row.cliente} bottom={row.sector ?? '—'} />
                       </td>
                       <td className={`${TD} max-w-35 truncate`} title={row.responsable_nombre}>
                         {row.responsable_nombre || '—'}
                       </td>
-                      <td className={`${TD} max-w-25 truncate text-slate-500`} title={row.sector ?? undefined}>
-                        {row.sector ?? '—'}
+                      <td className={`${TD} max-w-45`}>
+                        <TwoLines
+                          top={<span className="font-mono text-[10px]">{row.mzp ?? '—'}</span>}
+                          bottom={<span title={row.nombre}>{row.nombre}</span>}
+                        />
                       </td>
-                      <td className={`${TD} font-mono text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap`}>
-                        {row.mzp ?? '—'}
-                      </td>
-                      <td
-                        className={`${TD} font-medium text-slate-800 dark:text-slate-100 max-w-45 truncate`}
-                        title={row.nombre}
-                      >
-                        {row.nombre}
-                      </td>
-                      <td className={`${TD} text-slate-500 whitespace-nowrap`}>{row.probabilidad ?? '—'}</td>
                       <td className={TD}>
                         <div className="flex flex-col gap-1">
                           <Badge
@@ -903,7 +927,7 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
                           )}
                         </div>
                       </td>
-                      <td className={`${TD} text-right whitespace-nowrap tabular-nums`}>
+                      <td className={`${TD} text-right whitespace-nowrap tabular-nums font-semibold text-slate-800 dark:text-white`}>
                         {fmtMoney(row.valor_cotizado, row.moneda_cotizacion ?? 'COP')}
                       </td>
                       <td className={`${TD} text-right`}>
@@ -916,10 +940,18 @@ export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initial
             </div>
 
             <div className="md:hidden divide-y divide-slate-100 dark:divide-gray-800">
-              {filtered.map(row => (
+              {paged.map(row => (
                 <MiceSolicitudMobileCard key={row.id} row={row} onView={onView} onEdit={onEdit} canEdit={hasPermission('mice', 'editar')} />
               ))}
             </div>
+
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              pageSize={PAGE_SIZE}
+              total={filtered.length}
+              onPageChange={setPage}
+            />
 
             {hasActiveFilters && (
               <p className="px-3 sm:px-4 py-3 text-xs text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-gray-800">
