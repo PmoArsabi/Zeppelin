@@ -61,10 +61,18 @@ export default function FilterMultiSelect({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // Close on scroll / resize
+  // Reposition on scroll/resize; close only if the scroll happened outside the dropdown itself
   useEffect(() => {
     if (!open) return
-    const handler = () => close()
+    const reposition = () => {
+      if (!btnRef.current) return
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX, width: rect.width })
+    }
+    const handler = (e: Event) => {
+      if (dropRef.current?.contains(e.target as Node)) return
+      reposition()
+    }
     window.addEventListener('scroll', handler, true)
     window.addEventListener('resize', handler)
     return () => {
