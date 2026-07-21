@@ -154,7 +154,7 @@ export function parsearExcelPresupuesto(buffer: ArrayBuffer): ResultadoParseoPre
         mesNum = mesInt
       } else {
         // Texto "MM/YY" o "MM/YYYY" → extraer mes
-        const mmYY = String(rawMes ?? '').trim().match(/^(\d{1,2})[/\-](\d{2,4})$/)
+        const mmYY = String(rawMes ?? '').trim().match(/^(\d{1,2})[/-](\d{2,4})$/)
         if (mmYY) {
           const m = parseInt(mmYY[1], 10)
           if (m >= 1 && m <= 12) mesNum = m

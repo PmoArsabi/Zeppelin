@@ -22,11 +22,12 @@ export function formatSeguimientoError(message: string): string {
 export async function listSeguimientosMice(
   solicitudId: string
 ): Promise<{ data: SeguimientoMiceEntry[]; error: string | null }> {
+  // Orden descendente: el seguimiento más reciente aparece primero.
   const { data, error } = await supabase
     .from(TABLE)
     .select('id, solicitud_id, user_id, autor_nombre, mensaje, created_at')
     .eq('solicitud_id', solicitudId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
 
   if (error) return { data: [], error: formatSeguimientoError(error.message) }
   return { data: (data ?? []) as SeguimientoMiceEntry[], error: null }

@@ -137,7 +137,8 @@ export default function SeguimientoMiceChat({
       return
     }
     if (data) {
-      setEntries(prev => [...prev, data])
+      // La lista va del más reciente al más antiguo: el nuevo mensaje entra de primero.
+      setEntries(prev => [data, ...prev])
       syncDraft('')
     }
   }

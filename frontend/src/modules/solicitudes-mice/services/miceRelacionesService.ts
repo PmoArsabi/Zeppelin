@@ -215,7 +215,8 @@ export async function syncSolicitudRelaciones(
     const { error } = await supabase.from('th_solicitud_mice_documentos').insert(docRows)
     if (error) return { error: error.message }
 
-    // Liberar (anticipo=true -> false) es exclusivo del módulo Anticipos; desde MICE solo se marca.
+    // Liberar es exclusivo del módulo Facturas Excluidas; desde MICE solo se marca
+    // exclusión con tipo_exclusion = 'anticipo'.
     const facturasAMarcar = form.facturas.filter(f => f.anticipo)
     if (facturasAMarcar.length > 0) {
       const numerosFacturas = facturasAMarcar.map(f => f.numero.toUpperCase().trim())

@@ -1,26 +1,80 @@
 import { useEffect, useState } from 'react'
 import Switch from '@/components/ui/Switch'
-import { fetchFacturasAnticipo, type FacturaAnticipoEstado } from '../services/facturaAnticipoService'
+import {
+  facturaCorrespondeCliente,
+  fetchFacturasAnticipo,
+  type FacturaAnticipoEstado,
+} from '../services/facturaAnticipoService'
 import { FACTURA_REGEX, type FacturaMice } from '../types'
+import FacturaDetalleModal from './FacturaDetalleModal'
 
 interface Props {
   value: FacturaMice[]
   onChange: (facturas: FacturaMice[]) => void
+  clienteId: number | null
+  clienteNombre?: string
   readOnly?: boolean
   error?: string
+  /** Valor final aprobado (sección En operación) para comparar contra el total facturado. */
+  valorReferencia?: number | null
+  /** Notifica si alguna factura verificada pertenece a un cliente distinto. */
+  onClienteMismatchChange?: (hayMismatch: boolean) => void
+  /** Notifica el total facturado verificado (null si aún no hay facturas verificadas). */
+  onTotalFacturadoChange?: (total: number | null) => void
 }
 
-export default function FacturasMiceEditor({ value, onChange, readOnly = false, error }: Props) {
+function formatValorFactura(valor: number | null | undefined): string {
+  if (valor == null || !Number.isFinite(valor)) return '—'
+  return new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(valor)
+}
+
+export default function FacturasMiceEditor({
+  value,
+  onChange,
+  clienteId,
+  clienteNombre,
+  readOnly = false,
+  error,
+  valorReferencia = null,
+  onClienteMismatchChange,
+  onTotalFacturadoChange,
+}: Props) {
   const [anticipoByFactura, setAnticipoByFactura] = useState<Map<string, FacturaAnticipoEstado>>(new Map())
+  const [detalleAbierto, setDetalleAbierto] = useState<{ numero: string; estado: FacturaAnticipoEstado } | null>(null)
 
   const numerosValidos = value.map(f => f.numero.trim()).filter(n => FACTURA_REGEX.test(n))
   const numerosKey = numerosValidos.join(',')
 
+  const hayClienteMismatch = numerosValidos.some(numero => {
+    const estado = anticipoByFactura.get(numero)
+    return estado !== undefined && estado.existe && !facturaCorrespondeCliente(estado, clienteId)
+  })
+
+  const numerosUnicos = Array.from(new Set(numerosValidos))
+  const totalFacturado = numerosUnicos.reduce((acc, numero) => {
+    const estado = anticipoByFactura.get(numero)
+    return estado?.existe ? acc + (estado.totalConTa ?? 0) : acc
+  }, 0)
+  const hayTotal = numerosUnicos.some(numero => anticipoByFactura.get(numero)?.existe)
+  const totalInsuficiente = hayTotal && valorReferencia != null && totalFacturado < valorReferencia
+
   useEffect(() => {
-    if (numerosValidos.length === 0) {
-      setAnticipoByFactura(new Map())
-      return
-    }
+    onTotalFacturadoChange?.(hayTotal ? totalFacturado : null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hayTotal, totalFacturado])
+
+  useEffect(() => {
+    onClienteMismatchChange?.(hayClienteMismatch)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hayClienteMismatch])
+
+  useEffect(() => {
+    // Sin números válidos no hay nada que consultar; las entradas viejas del
+    // mapa son inofensivas porque solo se consultan números presentes en value.
+    if (numerosValidos.length === 0) return
     let cancelled = false
     fetchFacturasAnticipo(numerosValidos).then(({ data }) => {
       if (!cancelled) setAnticipoByFactura(data)
@@ -69,6 +123,7 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
               <tr className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                 <th className="text-left font-semibold uppercase tracking-wide px-2.5 py-1.5">Factura</th>
                 <th className="text-left font-semibold uppercase tracking-wide px-2.5 py-1.5">Recibo de caja</th>
+                <th className="text-right font-semibold uppercase tracking-wide px-2.5 py-1.5">Valor</th>
                 <th className="text-left font-semibold uppercase tracking-wide px-2.5 py-1.5">¿Es Anticipo?</th>
                 {!readOnly && <th className="w-8 px-2.5 py-1.5" />}
               </tr>
@@ -78,11 +133,18 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
                 const numero = f.numero.trim()
                 const esValida = FACTURA_REGEX.test(numero)
                 const estado = esValida ? anticipoByFactura.get(numero) : undefined
+                const noCorresponde = estado !== undefined
+                  && estado.existe
+                  && !facturaCorrespondeCliente(estado, clienteId)
 
                 return (
                   <tr
                     key={idx}
-                    className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60"
+                    className={`border-t ${
+                      noCorresponde
+                        ? 'border-rose-300 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/25'
+                        : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60'
+                    }`}
                   >
                     <td className="px-2.5 py-1.5">
                       {readOnly ? (
@@ -101,6 +163,12 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
                                      border-slate-200 dark:border-slate-700
                                      focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400"
                         />
+                      )}
+                      {noCorresponde && (
+                        <p className="mt-1 text-[10px] font-medium text-rose-600 dark:text-rose-400">
+                          No corresponde a {clienteNombre || `cliente ${clienteId}`}.
+                          {' '}Factura: {estado.codClientes.join(', ') || 'sin código'}
+                        </p>
                       )}
                     </td>
                     <td className="px-2.5 py-1.5">
@@ -121,6 +189,29 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
                                      focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400"
                         />
                       )}
+                    </td>
+                    <td className="px-2.5 py-1.5">
+                      <div className="flex items-center justify-end gap-2 whitespace-nowrap tabular-nums font-medium text-slate-700 dark:text-slate-300">
+                        <span>
+                          {esValida && estado !== undefined && estado.existe
+                            ? formatValorFactura(estado.totalConTa)
+                            : '—'}
+                        </span>
+                        {estado?.existe && estado.detalle.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setDetalleAbierto({ numero, estado })}
+                            aria-label={`Ver detalle de factura ${numero}`}
+                            title="Ver detalle de factura"
+                            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-indigo-600 dark:hover:bg-slate-700 dark:hover:text-indigo-400"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                              <circle cx="12" cy="12" r="2.5" strokeWidth={2} />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-2.5 py-1.5">
                       {!esValida ? (
@@ -144,7 +235,7 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
                           </span>
                           {estado.anticipo && !readOnly && (
                             <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                              Solo puede liberarse desde el módulo Anticipos.
+                              Solo puede liberarse desde el módulo Facturas Excluidas.
                             </p>
                           )}
                         </div>
@@ -175,8 +266,36 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
                 )
               })}
             </tbody>
+            {hayTotal && (
+              <tfoot>
+                <tr className="border-t border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+                  <td colSpan={2} className="px-2.5 py-1.5 text-right font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Total facturado
+                  </td>
+                  <td
+                    className={`px-2.5 py-1.5 text-right whitespace-nowrap tabular-nums font-semibold ${
+                      totalInsuficiente
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-slate-800 dark:text-white'
+                    }`}
+                  >
+                    {formatValorFactura(totalFacturado)}
+                  </td>
+                  <td colSpan={readOnly ? 1 : 2} />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
+      )}
+
+      {totalInsuficiente && (
+        <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+          </svg>
+          El total facturado ({formatValorFactura(totalFacturado)}) está por debajo del valor final aprobado ({formatValorFactura(valorReferencia)}).
+        </p>
       )}
 
       {!readOnly && (
@@ -191,6 +310,14 @@ export default function FacturasMiceEditor({ value, onChange, readOnly = false, 
         >
           + Agregar fila
         </button>
+      )}
+
+      {detalleAbierto && (
+        <FacturaDetalleModal
+          numero={detalleAbierto.numero}
+          estado={detalleAbierto.estado}
+          onClose={() => setDetalleAbierto(null)}
+        />
       )}
     </div>
   )

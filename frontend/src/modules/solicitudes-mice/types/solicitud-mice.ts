@@ -17,9 +17,10 @@ export interface FacturaMice {
   /** Número del recibo de caja asociado, o null si no tiene. */
   recibo_caja_numero: string | null
   /**
-   * Estado deseado de anticipo (pendiente hasta guardar el formulario).
-   * Se persiste en raw.xmart_informe_acumulado_bks.anticipo al guardar el Cierre.
-   * Solo puede pasar de false a true desde MICE — liberar (true a false) es exclusivo del módulo Anticipos.
+   * Estado deseado de exclusión tipo anticipo (pendiente hasta guardar el formulario).
+   * Se persiste como excluir_venta=true y tipo_exclusion='anticipo' en
+   * raw.xmart_informe_acumulado_bks al guardar el Cierre.
+   * Solo puede pasar de false a true desde MICE — liberar es exclusivo del módulo Facturas Excluidas.
    */
   anticipo: boolean
 }

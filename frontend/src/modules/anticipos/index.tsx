@@ -4,7 +4,7 @@ import { CashIcon } from '@/modules/icons'
 
 export const anticiposModule: ModuleDefinition = {
   id: 'anticipos',
-  label: 'Anticipos',
+  label: 'Facturas Excluidas',
   icon: <CashIcon />,
   unidad: 'anticipos',
   component: lazy(() => import('./AnticiposModule')),

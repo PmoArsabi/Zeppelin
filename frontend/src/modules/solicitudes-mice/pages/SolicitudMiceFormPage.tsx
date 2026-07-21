@@ -11,7 +11,7 @@ import {
 } from '../lib/etapasMice'
 import { buildClienteNombreById, fetchClientesZeppelinCatalog } from '@/lib/clientes'
 import ClienteCustomSelect from '@/components/ui/ClienteCustomSelect'
-import { parseDecimalCO } from '@/lib/decimalFormat'
+import { formatDecimalCO, parseDecimalCO } from '@/lib/decimalFormat'
 import { useAuth } from '@/context/AuthContext'
 import { Card } from '@/components/ui/Card'
 import FormField from '@/components/ui/FormField'
@@ -33,7 +33,7 @@ import {
 } from '../types'
 import type { MiceCatalogos } from '../types/mice-catalogos'
 import { MICE_CATALOGOS_VACIOS } from '../types/mice-catalogos'
-import { fetchFacturasAnticipo } from '../services/facturaAnticipoService'
+import { facturaCorrespondeCliente, fetchFacturasAnticipo } from '../services/facturaAnticipoService'
 import {
   loadSolicitudForEdit,
   saveSolicitudMice,
@@ -65,6 +65,7 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
   const seccionCotizacion = isEdit ? mostrarSeccionCotizacion(etapa) : ETAPAS_CON_COTIZACION.includes(etapa ?? '')
   const seccionOperacion  = isEdit ? mostrarSeccionOperacion(etapa)  : ETAPAS_CON_OPERACION.includes(etapa ?? '')
   const seccionCierre     = isEdit ? mostrarSeccionCierre(etapa)     : ETAPAS_CON_CIERRE.includes(etapa ?? '')
+  const facturasObligatorias = etapa === 'cerrado'
   const e: Errors = {}
   if (!catalog.anios.includes(form.anio)) e.anio = 'Seleccione un año válido.'
   if (!form.responsable_id.trim()) e.responsable_id = 'Seleccione un responsable.'
@@ -119,9 +120,9 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
   }
 
   if (seccionCierre) {
-    if (form.facturas.length === 0) {
+    if (facturasObligatorias && form.facturas.length === 0) {
       e.facturas = 'Agregue al menos una factura.'
-    } else {
+    } else if (form.facturas.length > 0) {
       const numeros = form.facturas.map(f => f.numero.trim().toUpperCase())
       if (numeros.some(n => !FACTURA_REGEX.test(n))) {
         e.facturas = 'Hay facturas con formato inválido. Ej: ABCD1234'
@@ -144,7 +145,11 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
 }
 
 /** Valida que las facturas del Cierre existan en raw.xmart_informe_acumulado_bks. */
-async function validateFacturasEnInforme(form: SolicitudMiceForm, seccionCierre: boolean): Promise<string | null> {
+async function validateFacturasEnInforme(
+  form: SolicitudMiceForm,
+  seccionCierre: boolean,
+  exigirTotalMinimo = false
+): Promise<string | null> {
   if (!seccionCierre || form.facturas.length === 0) return null
   const numeros = form.facturas.map(f => f.numero.trim().toUpperCase())
   const { data, error } = await fetchFacturasAnticipo(numeros)
@@ -152,6 +157,27 @@ async function validateFacturasEnInforme(form: SolicitudMiceForm, seccionCierre:
   const faltantes = numeros.filter(n => !data.get(n)?.existe)
   if (faltantes.length > 0) {
     return `Las siguientes facturas no existen en el informe acumulado: ${faltantes.join(', ')}`
+  }
+
+  const clienteIncorrecto = numeros.filter(numero => {
+    const estado = data.get(numero)
+    return estado != null && !facturaCorrespondeCliente(estado, form.cliente_id)
+  })
+  if (clienteIncorrecto.length > 0) {
+    return `Las siguientes facturas no corresponden al cliente seleccionado: ${clienteIncorrecto.join(', ')}`
+  }
+
+  if (exigirTotalMinimo) {
+    const valorAprobado = parseDecimalCO(form.valor_final_aprobado)
+    if (valorAprobado != null) {
+      const total = Array.from(new Set(numeros)).reduce(
+        (acc, numero) => acc + (data.get(numero)?.totalConTa ?? 0),
+        0
+      )
+      if (total < valorAprobado) {
+        return `El total facturado (${formatDecimalCO(total)}) es menor que el valor final aprobado (${formatDecimalCO(valorAprobado)}). No es posible cerrar la solicitud.`
+      }
+    }
   }
 
   return null
@@ -244,6 +270,8 @@ export default function SolicitudMiceFormPage({
   const [formBaseline, setFormBaseline] = useState<SolicitudMiceForm | null>(null)
   const [activeTab, setActiveTab] = useState<FormTabId>('cotizacion')
   const [mzpLoading, setMzpLoading] = useState(false)
+  const [facturasClienteMismatch, setFacturasClienteMismatch] = useState(false)
+  const [totalFacturado, setTotalFacturado] = useState<number | null>(null)
 
   const formBusy = saveFeedback !== null
   const isSaving = saveFeedback?.status === 'saving'
@@ -287,6 +315,8 @@ export default function SolicitudMiceFormPage({
     if (!etapaActual) return false
     const siguiente = siguienteEtapa(etapaActual)
     if (!siguiente) return false
+    // Ninguna factura asociada puede pertenecer a otro cliente
+    if (facturasClienteMismatch) return false
     // Para avanzar a cotizacion_enviada: valor, utilidad y probabilidad obligatorios
     if (siguiente === 'cotizacion_enviada') {
       const valorOk = !!form.valor_cotizado.trim() && parseDecimalCO(form.valor_cotizado) != null
@@ -300,12 +330,17 @@ export default function SolicitudMiceFormPage({
       const urOk = !!form.utilidad_real.trim() && parseDecimalCO(form.utilidad_real) != null
       return vfOk && urOk
     }
-    // Para avanzar a en_cierre o cerrado: al menos un documento
-    if (siguiente === 'en_cierre' || siguiente === 'cerrado') {
-      return form.facturas.length > 0
+    // Los anticipos son opcionales en operación y en cierre. Para cerrar,
+    // debe existir al menos una factura y el total facturado debe cubrir
+    // el valor final aprobado.
+    if (siguiente === 'cerrado') {
+      if (form.facturas.length === 0) return false
+      const valorAprobado = parseDecimalCO(form.valor_final_aprobado)
+      if (valorAprobado != null && totalFacturado != null && totalFacturado < valorAprobado) return false
+      return true
     }
     return true
-  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real, form.facturas])
+  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real, form.facturas, facturasClienteMismatch, totalFacturado])
 
   useEffect(() => {
     if (saveFeedback?.status !== 'success') return
@@ -647,7 +682,11 @@ const estadoOptions = useMemo(() => {
       return
     }
 
-    const facturasError = await validateFacturasEnInforme(formAvanzado, mostrarSeccionCierre(siguiente))
+    const facturasError = await validateFacturasEnInforme(
+      formAvanzado,
+      mostrarSeccionCierre(siguiente),
+      siguiente === 'cerrado'
+    )
     if (facturasError) {
       setErrors({ facturas: facturasError })
       setActiveTab('cotizacion')
@@ -1164,7 +1203,11 @@ const estadoOptions = useMemo(() => {
           <FormSection
             step={5}
             title="Cierre"
-            description="Facturas y recibos de caja del evento"
+            description={
+              etapaActual === 'en_operacion'
+                ? 'Registre anticipos durante la operación; complete las facturas y recibos al realizar el cierre'
+                : 'Facturas y recibos de caja del evento'
+            }
           >
             <FormField
               label="Facturas y recibos de caja"
@@ -1174,7 +1217,12 @@ const estadoOptions = useMemo(() => {
               <FacturasMiceEditor
                 value={form.facturas}
                 onChange={facturas => set('facturas', facturas)}
+                clienteId={form.cliente_id}
+                clienteNombre={form.cliente}
                 readOnly={effectiveLock}
+                valorReferencia={parseDecimalCO(form.valor_final_aprobado)}
+                onClienteMismatchChange={setFacturasClienteMismatch}
+                onTotalFacturadoChange={setTotalFacturado}
               />
             </FormField>
           </FormSection>

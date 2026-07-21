@@ -28,11 +28,17 @@ export default function ClienteCustomSelect({ value, onChange, disabled, error, 
   const inputRef  = useRef<HTMLInputElement>(null)
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // El cliente mostrado se deriva del value: si no coincide con lo resuelto, aún no hay selección visible.
+  const current = value != null && selected?.id === value ? selected : null
+
   // Resolver el cliente seleccionado por ID al montar o cuando cambia value
   useEffect(() => {
-    if (value == null) { setSelected(null); return }
-    if (selected?.id === value) return
-    fetchClienteById(value).then(c => setSelected(c))
+    if (value == null || selected?.id === value) return
+    let cancelled = false
+    fetchClienteById(value).then(c => {
+      if (!cancelled) setSelected(c)
+    })
+    return () => { cancelled = true }
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadOptions = useCallback(async (q: string) => {
@@ -176,11 +182,11 @@ export default function ClienteCustomSelect({ value, onChange, disabled, error, 
               ? 'ring-2 ring-indigo-500/25 border-indigo-400 dark:border-indigo-500'
               : 'border-slate-200 dark:border-slate-700'
           }
-          ${selected ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}
+          ${current ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}
       >
-        <span className="truncate">{selected ? selected.fullname : placeholder}</span>
+        <span className="truncate">{current ? current.fullname : placeholder}</span>
         <div className="flex items-center gap-2 shrink-0 ml-2">
-          {selected && !disabled && (
+          {current && !disabled && (
             <span
               role="button"
               onClick={clear}

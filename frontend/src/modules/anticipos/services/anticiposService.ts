@@ -21,6 +21,14 @@ async function conReintentoPorTimeout<T>(
   return ultimo!
 }
 
+export type TipoExclusion = 'anticipo' | 'negociacion' | 'otro'
+
+export const TIPOS_EXCLUSION: { value: TipoExclusion; label: string }[] = [
+  { value: 'anticipo', label: 'Anticipo' },
+  { value: 'negociacion', label: 'Negociación' },
+  { value: 'otro', label: 'Otro' },
+]
+
 export interface AnticipoRow {
   fecha: string | null
   nomofiventa: string | null
@@ -31,6 +39,8 @@ export interface AnticipoRow {
   observacion_fact: string | null
   descripcion_item: string | null
   total_con_impuestos: number
+  tipo_exclusion?: TipoExclusion | null
+  mzp?: string | null
 }
 
 export async function fetchAnticipos(): Promise<{ data: AnticipoRow[]; error: string | null }> {
@@ -46,9 +56,10 @@ export async function liberarAnticipo(
   autor: string,
   observacion: string
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc('mice_set_factura_anticipo', {
+  const { error } = await supabase.rpc('mice_set_factura_exclusion', {
     p_factura: factura,
-    p_anticipo: false,
+    p_excluir: false,
+    p_tipo: null,
     p_autor: autor,
     p_observacion: observacion,
   })
@@ -59,6 +70,7 @@ export interface FacturaBusquedaResult {
   factura: string
   tiene_linea_elegible: boolean
   anticipo: boolean
+  tipo_exclusion?: TipoExclusion | null
 }
 
 export async function buscarFactura(texto: string): Promise<{ data: FacturaBusquedaResult[]; error: string | null }> {
@@ -69,11 +81,18 @@ export async function buscarFactura(texto: string): Promise<{ data: FacturaBusqu
   })
 }
 
-export async function marcarAnticipo(factura: string, autor: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc('mice_set_factura_anticipo', {
+export async function excluirFactura(
+  factura: string,
+  tipo: TipoExclusion,
+  autor: string,
+  observacion: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('mice_set_factura_exclusion', {
     p_factura: factura,
-    p_anticipo: true,
+    p_excluir: true,
+    p_tipo: tipo,
     p_autor: autor,
+    p_observacion: observacion || null,
   })
   return { error: error?.message ?? null }
 }

@@ -10,10 +10,9 @@ import {
 } from '../types/mice-catalogos'
 
 function generateAnios(): number[] {
+  // Siempre 3 años: el anterior, el actual y el siguiente.
   const current = new Date().getFullYear()
-  const result: number[] = []
-  for (let y = current - 1; y <= current + 5; y++) result.push(y)
-  return result
+  return [current - 1, current, current + 1]
 }
 const ANIOS_DINAMICOS = generateAnios()
 const FALLBACK_MONEDAS = [

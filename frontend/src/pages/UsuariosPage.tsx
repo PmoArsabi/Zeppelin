@@ -37,7 +37,7 @@ const UNIDAD_OPTIONS: { value: UnidadSlug; label: string }[] = [
   { value: 'mice', label: 'MICE' },
   { value: 'corp', label: 'Corporativo' },
   { value: 'siigo', label: 'Carga Siigo' },
-  { value: 'anticipos', label: 'Anticipos' },
+  { value: 'anticipos', label: 'Facturas Excluidas' },
 ]
 
 interface NewUserForm {
@@ -397,7 +397,7 @@ const roleBadge = (role: string) =>
     analista_bsp: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">Analista BSP</span>,
   } as Record<string, React.ReactNode>)[role] ?? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-slate-400">{role}</span>
 
-const UNIDAD_LABELS: Record<string, string> = { mice: 'MICE', corp: 'Corp', siigo: 'Siigo', anticipos: 'Anticipos' }
+const UNIDAD_LABELS: Record<string, string> = { mice: 'MICE', corp: 'Corp', siigo: 'Siigo', anticipos: 'Facturas Excluidas' }
 const UNIDAD_COLORS: Record<string, string> = {
   mice: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300',
   corp: 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300',

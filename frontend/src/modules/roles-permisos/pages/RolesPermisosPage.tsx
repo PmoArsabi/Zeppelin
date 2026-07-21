@@ -34,6 +34,10 @@ const ROL_LABELS: Record<string, string> = {
   financiero:  'Financiero',
 }
 
+const UNIDAD_LABELS: Record<string, string> = {
+  anticipos: 'Facturas Excluidas',
+}
+
 interface Props { onNavigate: NavigateFn }
 
 export default function RolesPermisosPage({ onNavigate }: Props) {
@@ -193,7 +197,7 @@ export default function RolesPermisosPage({ onNavigate }: Props) {
                 <div className="px-6 py-4 border-b border-slate-100 dark:border-gray-800 bg-slate-50/60 dark:bg-gray-800/40 flex items-center gap-3">
                   <span className="w-2 h-2 rounded-full bg-indigo-500" />
                   <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                    Unidad: {unidad.nombre}
+                    Unidad: {UNIDAD_LABELS[unidad.slug] ?? unidad.nombre}
                   </h2>
                 </div>
 

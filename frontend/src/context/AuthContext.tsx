@@ -60,17 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Cargar display_name desde td_profiles
+  // Cargar display_name desde td_profiles (si no hay usuario, se deriva '' al exponer el contexto)
   useEffect(() => {
-    if (!user) { setDisplayName(''); return }
+    if (!user) return
+    let cancelled = false
     supabase
       .from('td_profiles')
       .select('display_name')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
-        setDisplayName(data?.display_name?.trim() || user.email || '')
+        if (!cancelled) setDisplayName(data?.display_name?.trim() || user.email || '')
       })
+    return () => { cancelled = true }
   }, [user])
 
   // Cargar unidades asignadas al usuario
@@ -134,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, loading, role, unidades, permissions,
-      isAdmin: permissions.isAdmin, displayName, hasPermission, signOut,
+      isAdmin: permissions.isAdmin, displayName: user ? displayName : '', hasPermission, signOut,
     }}>
       {children}
     </AuthContext.Provider>
