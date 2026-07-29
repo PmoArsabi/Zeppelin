@@ -90,6 +90,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             email: form.email.trim().toLowerCase(),
             display_name: form.display_name.trim(),
             role: form.role,
+            origin: window.location.origin,
             ...(form.password.trim() ? { password: form.password.trim() } : {}),
           }),
         }

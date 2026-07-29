@@ -38,7 +38,7 @@ export default function LoginPage() {
         if (error) throw error
       } else {
         const { error } = await supabase.functions.invoke('request-password-reset', {
-          body: { email },
+          body: { email, origin: window.location.origin },
         })
         if (error) throw error
         setMessage('Enlace enviado. Revisa tu bandeja de entrada.')
