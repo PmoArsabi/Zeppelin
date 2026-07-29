@@ -37,8 +37,8 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
+        const { error } = await supabase.functions.invoke('request-password-reset', {
+          body: { email },
         })
         if (error) throw error
         setMessage('Enlace enviado. Revisa tu bandeja de entrada.')

@@ -7,6 +7,13 @@ import { fetchAnticipos, liberarAnticipo, TIPOS_EXCLUSION, type AnticipoRow } fr
 import MarcarFacturaAnticipoModal from '../components/MarcarFacturaAnticipoModal'
 import LiberarAnticipoDialog from '../components/LiberarAnticipoDialog'
 import { exportarAnticiposExcel } from '../lib/exportarAnticiposExcel'
+import FilterMultiSelect from '@/components/filters/FilterMultiSelect'
+import FilterSearchField from '@/components/filters/FilterSearchField'
+import FilterDateRangeField from '@/components/filters/FilterDateRangeField'
+
+function labelTipo(tipo: string): string {
+  return TIPOS_EXCLUSION.find(t => t.value === tipo)?.label ?? tipo
+}
 
 function fmtMoneda(v: number) {
   return new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v)
@@ -34,8 +41,8 @@ export default function AnticiposListPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
-  const [tipoFiltro, setTipoFiltro] = useState('')
-  const [oficinaFiltro, setOficinaFiltro] = useState('')
+  const [tipoFiltro, setTipoFiltro] = useState<string[]>([])
+  const [oficinaFiltro, setOficinaFiltro] = useState<string[]>([])
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [liberando, setLiberando] = useState<string | null>(null)
@@ -72,11 +79,19 @@ export default function AnticiposListPage() {
     return [...set].sort((a, b) => a.localeCompare(b, 'es'))
   }, [rows])
 
+  const tipos = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of rows) {
+      if (r.tipo_exclusion) set.add(r.tipo_exclusion)
+    }
+    return [...set].sort((a, b) => labelTipo(a).localeCompare(labelTipo(b), 'es'))
+  }, [rows])
+
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     return rows.filter(r => {
-      if (tipoFiltro && (r.tipo_exclusion ?? '') !== tipoFiltro) return false
-      if (oficinaFiltro && (r.nomofiventa?.trim() ?? '') !== oficinaFiltro) return false
+      if (tipoFiltro.length > 0 && !tipoFiltro.includes(r.tipo_exclusion ?? '')) return false
+      if (oficinaFiltro.length > 0 && !oficinaFiltro.includes(r.nomofiventa?.trim() ?? '')) return false
       // r.fecha viene como YYYY-MM-DD; la comparación de texto respeta el orden cronológico
       const fecha = (r.fecha ?? '').slice(0, 10)
       if (fechaDesde && (!fecha || fecha < fechaDesde)) return false
@@ -122,71 +137,36 @@ export default function AnticiposListPage() {
             <Alert variant="error" className="mb-4">{error}</Alert>
           )}
 
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <input
-              type="text"
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <FilterSearchField
+              label="Buscar"
               value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar por factura, MZP, cliente, pasajero o producto…"
-              className="flex-1 min-w-60 max-w-100 text-sm rounded-lg border px-3 py-2
-                         bg-white dark:bg-slate-900 text-slate-900 dark:text-white
-                         placeholder-slate-400 dark:placeholder-slate-500
-                         border-slate-200 dark:border-slate-700
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400"
+              onChange={setBusqueda}
+              placeholder="Factura, MZP, cliente, pasajero o producto…"
+              className="flex-1 min-w-60 max-w-100"
             />
-            <select
+            <FilterMultiSelect
+              label="Tipo"
               value={tipoFiltro}
-              onChange={e => setTipoFiltro(e.target.value)}
-              aria-label="Filtrar por tipo de exclusión"
-              className="text-sm rounded-lg border px-3 py-2
-                         bg-white dark:bg-slate-900 text-slate-900 dark:text-white
-                         border-slate-200 dark:border-slate-700
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400"
-            >
-              <option value="">Todos los tipos</option>
-              {TIPOS_EXCLUSION.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-            <select
+              onChange={setTipoFiltro}
+              options={tipos}
+              className="w-44"
+            />
+            <FilterMultiSelect
+              label="Oficina"
               value={oficinaFiltro}
-              onChange={e => setOficinaFiltro(e.target.value)}
-              aria-label="Filtrar por oficina de venta"
-              className="max-w-55 text-sm rounded-lg border px-3 py-2
-                         bg-white dark:bg-slate-900 text-slate-900 dark:text-white
-                         border-slate-200 dark:border-slate-700
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400"
-            >
-              <option value="">Todas las oficinas</option>
-              {oficinas.map(o => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-            </select>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="date"
-                value={fechaDesde}
-                onChange={e => setFechaDesde(e.target.value)}
-                aria-label="Fecha desde"
-                title="Fecha desde"
-                className="text-sm rounded-lg border px-3 py-2
-                           bg-white dark:bg-slate-900 text-slate-900 dark:text-white
-                           border-slate-200 dark:border-slate-700
-                           focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400"
-              />
-              <span className="text-xs text-slate-400 dark:text-slate-500">a</span>
-              <input
-                type="date"
-                value={fechaHasta}
-                onChange={e => setFechaHasta(e.target.value)}
-                aria-label="Fecha hasta"
-                title="Fecha hasta"
-                className="text-sm rounded-lg border px-3 py-2
-                           bg-white dark:bg-slate-900 text-slate-900 dark:text-white
-                           border-slate-200 dark:border-slate-700
-                           focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400"
-              />
-            </div>
+              onChange={setOficinaFiltro}
+              options={oficinas}
+              className="w-55"
+            />
+            <FilterDateRangeField
+              label="Fecha"
+              desde={fechaDesde}
+              hasta={fechaHasta}
+              onChangeDesde={setFechaDesde}
+              onChangeHasta={setFechaHasta}
+              className="w-64"
+            />
             <button
               type="button"
               onClick={() => setModalAbierto(true)}
@@ -283,7 +263,7 @@ export default function AnticiposListPage() {
                           {r.tipo_exclusion ? (
                             <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full
                                              bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-                              {TIPOS_EXCLUSION.find(t => t.value === r.tipo_exclusion)?.label ?? r.tipo_exclusion}
+                              {labelTipo(r.tipo_exclusion)}
                             </span>
                           ) : (
                             <span className="text-slate-400 dark:text-slate-500">—</span>

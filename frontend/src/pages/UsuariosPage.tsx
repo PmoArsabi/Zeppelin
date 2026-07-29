@@ -22,7 +22,6 @@ interface UserRow {
 }
 
 type RoleOption = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero' | 'analista_bsp'
-type UnidadSlug = 'mice' | 'corp' | 'siigo' | 'anticipos'
 
 const ROLE_OPTIONS: { value: RoleOption; label: string }[] = [
   { value: 'admin',        label: 'Administrador' },
@@ -33,23 +32,15 @@ const ROLE_OPTIONS: { value: RoleOption; label: string }[] = [
   { value: 'analista_bsp', label: 'Analista BSP' },
 ]
 
-const UNIDAD_OPTIONS: { value: UnidadSlug; label: string }[] = [
-  { value: 'mice', label: 'MICE' },
-  { value: 'corp', label: 'Corporativo' },
-  { value: 'siigo', label: 'Carga Siigo' },
-  { value: 'anticipos', label: 'Facturas Excluidas' },
-]
-
 interface NewUserForm {
   email: string
   display_name: string
   role: RoleOption
   password: string
-  unidades: UnidadSlug[]
 }
 
 const EMPTY_FORM: NewUserForm = {
-  email: '', display_name: '', role: 'asesor', password: '', unidades: [],
+  email: '', display_name: '', role: 'asesor', password: '',
 }
 
 interface Props {
@@ -68,16 +59,6 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     if (errors[key]) setErrors(prev => ({ ...prev, [key]: undefined }))
   }
 
-  const toggleUnidad = (slug: UnidadSlug) => {
-    setForm(prev => ({
-      ...prev,
-      unidades: prev.unidades.includes(slug)
-        ? prev.unidades.filter(u => u !== slug)
-        : [...prev.unidades, slug],
-    }))
-    setErrors(prev => ({ ...prev, unidades: undefined }))
-  }
-
   const validate = () => {
     const e: Partial<Record<keyof NewUserForm, string>> = {}
     if (!form.display_name.trim()) e.display_name = 'El nombre es obligatorio.'
@@ -85,8 +66,6 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
       e.email = 'Ingresa un correo válido.'
     if (form.password && form.password.trim().length < 8)
       e.password = 'La contraseña debe tener al menos 8 caracteres.'
-    if (form.role !== 'admin' && form.unidades.length === 0)
-      e.unidades = 'Selecciona al menos una unidad.'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -111,7 +90,6 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             email: form.email.trim().toLowerCase(),
             display_name: form.display_name.trim(),
             role: form.role,
-            unidad_slugs: form.role === 'admin' ? [] : form.unidades,
             ...(form.password.trim() ? { password: form.password.trim() } : {}),
           }),
         }
@@ -171,7 +149,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               <CustomSelect
                 id="cn_role"
                 value={form.role}
-                onChange={v => { set('role', v as RoleOption); if (v === 'admin') set('unidades', []) }}
+                onChange={v => set('role', v as RoleOption)}
                 options={ROLE_OPTIONS}
               />
             </FormField>
@@ -180,31 +158,6 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 onChange={e => set('email', e.target.value)}
                 placeholder="usuario@empresa.com" error={!!errors.email} />
             </FormField>
-
-            {/* Unidades — oculto para admin */}
-            {form.role !== 'admin' && (
-              <FormField label="Unidades asignadas" required className="sm:col-span-2" error={errors.unidades}>
-                <div className="flex gap-2 mt-1">
-                  {UNIDAD_OPTIONS.map(u => {
-                    const active = form.unidades.includes(u.value)
-                    return (
-                      <button
-                        key={u.value}
-                        type="button"
-                        onClick={() => toggleUnidad(u.value)}
-                        className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-all
-                          ${active
-                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                            : 'border-slate-200 dark:border-gray-700 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
-                          }`}
-                      >
-                        {u.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </FormField>
-            )}
 
             <FormField label="Contraseña provisional" htmlFor="cn_password" className="sm:col-span-2"
               error={errors.password}
@@ -249,20 +202,15 @@ function EditModal({ user, onClose, onSaved }: {
   const { user: me } = useAuth()
   const [displayName, setDisplayName] = useState(user.display_name)
   const [role, setRole] = useState<RoleOption>(user.role as RoleOption)
-  const [unidades, setUnidades]       = useState<UnidadSlug[]>((user.unidades ?? []) as UnidadSlug[])
   const [disabled, setDisabled]       = useState(user.disabled)
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
   const isSelf = me?.id === user.id
 
-  const toggleUnidad = (slug: UnidadSlug) =>
-    setUnidades(prev => prev.includes(slug) ? prev.filter(u => u !== slug) : [...prev, slug])
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!displayName.trim()) { setError('El nombre es obligatorio.'); return }
-    if (role !== 'admin' && unidades.length === 0) { setError('Selecciona al menos una unidad.'); return }
     setSaving(true)
     setError(null)
     try {
@@ -280,14 +228,13 @@ function EditModal({ user, onClose, onSaved }: {
             user_id: user.id,
             role,
             display_name: displayName.trim(),
-            unidad_slugs: role === 'admin' ? [] : unidades,
             ...(isSelf ? {} : { disabled }),
           }),
         }
       )
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Error al actualizar.')
-      onSaved({ display_name: displayName.trim(), role, disabled: isSelf ? user.disabled : disabled, unidades: role === 'admin' ? [] : unidades })
+      onSaved({ display_name: displayName.trim(), role, disabled: isSelf ? user.disabled : disabled })
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido.')
@@ -330,26 +277,10 @@ function EditModal({ user, onClose, onSaved }: {
             />
           </FormField>
 
-          {role !== 'admin' && (
-            <FormField label="Unidad(es)" required>
-              <div className="flex gap-2 flex-wrap pt-1">
-                {UNIDAD_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => toggleUnidad(opt.value as UnidadSlug)}
-                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all
-                      ${unidades.includes(opt.value as UnidadSlug)
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'border-slate-200 dark:border-gray-700 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
-                      }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </FormField>
-          )}
+          <p className="text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-gray-800 rounded-xl px-4 py-3">
+            Las unidades a las que accede el usuario se determinan automáticamente por su rol
+            (ver módulo "Roles y Permisos").
+          </p>
 
           {!isSelf && (
             <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
