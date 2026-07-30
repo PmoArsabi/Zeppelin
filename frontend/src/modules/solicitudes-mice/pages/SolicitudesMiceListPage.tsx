@@ -682,8 +682,8 @@ function MiceSolicitudMobileCard({
 }
 
 export default function SolicitudesMiceListPage({ onNew, onEdit, onView, initialFilters }: Props) {
-  const { user, hasPermission, role } = useAuth()
-  const canSeeMatrix = role === 'admin' || role === 'coordinador'
+  const { user, hasPermission, isAdmin, rolesPorUnidad } = useAuth()
+  const canSeeMatrix = isAdmin || rolesPorUnidad.mice === 'coordinador'
   const [rows, setRows] = useState<SolicitudMiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

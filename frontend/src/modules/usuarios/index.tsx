@@ -6,6 +6,6 @@ export const usuariosModule: ModuleDefinition = {
   id: 'usuarios',
   label: 'Usuarios',
   icon: <UsersIcon />,
-  allowedRoles: ['admin'],
+  adminOnly: true,
   component: lazy(() => import('./UsuariosModule')),
 }

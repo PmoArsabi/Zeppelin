@@ -257,7 +257,6 @@ export default function SolicitudMiceFormPage({
   const [sectores, setSectores] = useState<string[]>([])
   const [usuariosTiqueteador, setUsuariosTiqueteador] = useState<{ value: string; label: string }[]>([])
   const [usuariosTiqueteadorError, setUsuariosTiqueteadorError] = useState<string | null>(null)
-  const [usuariosTiqueteadorLoaded, setUsuariosTiqueteadorLoaded] = useState(false)
   const [usuariosResponsableMice, setUsuariosResponsableMice] = useState<{ value: string; label: string }[]>([])
   const [usuariosResponsableMiceError, setUsuariosResponsableMiceError] = useState<string | null>(null)
   const [usuariosResponsableMiceLoaded, setUsuariosResponsableMiceLoaded] = useState(false)
@@ -350,13 +349,15 @@ export default function SolicitudMiceFormPage({
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUsuariosTiqueteadorLoaded(false)
-     
     setUsuariosResponsableMiceLoaded(false)
     Promise.all([
       fetchClientesZeppelinCatalog(),
       fetchSectoresMice(),
-      fetchUsuariosTiqueteador(),
+      fetchUsuariosTiqueteador(
+        editTarget?.tiqueteador_user_id && editTarget.tiqueteador_asignado
+          ? { id: editTarget.tiqueteador_user_id, nombre: editTarget.tiqueteador_asignado }
+          : undefined
+      ),
       fetchUsuariosResponsablesMice(),
       fetchMiceCatalogos(),
     ]).then(([clientesRes, sectoresList, usuariosRes, responsablesRes, miceCat]) => {
@@ -365,7 +366,6 @@ export default function SolicitudMiceFormPage({
       setSectores(sectoresList)
       if (usuariosRes.error) setUsuariosTiqueteadorError(usuariosRes.error)
       setUsuariosTiqueteador(usuariosRes.data)
-      setUsuariosTiqueteadorLoaded(true)
       if (responsablesRes.error) setUsuariosResponsableMiceError(responsablesRes.error)
       setUsuariosResponsableMice(responsablesRes.data)
       setUsuariosResponsableMiceLoaded(true)
@@ -417,17 +417,8 @@ export default function SolicitudMiceFormPage({
     }))
   }, [usuariosResponsableMiceLoaded, usuariosResponsableMice, form.responsable_id])
 
-  useEffect(() => {
-    if (!usuariosTiqueteadorLoaded || !form.tiqueteador_user_id) return
-    const isAllowed = usuariosTiqueteador.some(u => u.value === form.tiqueteador_user_id)
-    if (isAllowed) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setForm(prev => ({
-      ...prev,
-      tiqueteador_user_id: '',
-      tiqueteador_asignado: '',
-    }))
-  }, [usuariosTiqueteadorLoaded, usuariosTiqueteador, form.tiqueteador_user_id])
+  // Nota: fetchUsuariosTiqueteador ya incluye el tiqueteador actual del registro (aunque esté
+  // inactivo o haya cambiado de rol), así que no se limpia automáticamente al cargar edición.
 
   const profileNombreById = useMemo(() => {
     const m = new Map<string, string>()

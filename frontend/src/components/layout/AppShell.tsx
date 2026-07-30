@@ -35,19 +35,23 @@ function ThemeToggle() {
   )
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  coordinador:  'Coordinador',
+  asesor:       'Asesor',
+  tiqueteador:  'Tiqueteador',
+  financiero:   'Financiero',
+  analista_bsp: 'Analista BSP',
+}
+
 export default function AppShell({ children, activeModule = 'solicitudes-mice', onNavigate }: AppShellProps) {
-  const { user, signOut, role, unidades } = useAuth()
-  const ROLE_LABELS: Record<typeof role, string> = {
-    admin:        'Administrador',
-    coordinador:  'Coordinador',
-    asesor:       'Asesor',
-    tiqueteador:  'Tiqueteador',
-    financiero:   'Financiero',
-    analista_bsp: 'Analista BSP',
-  }
+  const { user, signOut, isAdmin, rolesPorUnidad, unidades } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const navItems = getNavItems(role, unidades)
+  const navItems = getNavItems(isAdmin, unidades)
+
+  const roleSummary = isAdmin
+    ? 'Administrador'
+    : [...new Set(Object.values(rolesPorUnidad))].map(r => ROLE_LABELS[r] ?? r).join(', ') || 'Sin rol asignado'
 
   const NavItem = ({ item }: { item: (typeof navItems)[number] }) => {
     const active = activeModule === item.id
@@ -98,7 +102,7 @@ export default function AppShell({ children, activeModule = 'solicitudes-mice', 
             <div className="min-w-0">
               <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{user?.email}</p>
               <p className="text-[10px] text-slate-400 dark:text-slate-500 capitalize">
-                {ROLE_LABELS[role]}
+                {roleSummary}
               </p>
             </div>
           </div>
@@ -150,7 +154,7 @@ export default function AppShell({ children, activeModule = 'solicitudes-mice', 
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{user?.email}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">{ROLE_LABELS[role]}</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">{roleSummary}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1 px-1">

@@ -1,5 +1,5 @@
 import type { ModuleDefinition, ModuleId, ModuleNavItem } from './types'
-import type { UserRole, UnidadSlug } from '@/context/AuthContext'
+import type { UnidadSlug } from '@/context/AuthContext'
 import { solicitudesCorporativosModule } from './solicitudes-corporativos'
 import { solicitudesMiceModule } from './solicitudes-mice'
 import { usuariosModule } from './usuarios'
@@ -21,20 +21,21 @@ export function getModule(id: ModuleId): ModuleDefinition | undefined {
   return MODULES.find(m => m.id === id)
 }
 
-export function roleCanAccess(mod: ModuleDefinition, role: UserRole, unidades: UnidadSlug[]): boolean {
-  if (mod.allowedRoles && !mod.allowedRoles.includes(role)) return false
-  if (mod.unidad && role !== 'admin' && !unidades.includes(mod.unidad)) return false
+export function roleCanAccess(mod: ModuleDefinition, isAdmin: boolean, unidades: UnidadSlug[]): boolean {
+  if (isAdmin) return true
+  if (mod.adminOnly) return false
+  if (mod.unidad && !unidades.includes(mod.unidad)) return false
   return true
 }
 
-export function getNavItems(role: UserRole, unidades: UnidadSlug[]): ModuleNavItem[] {
+export function getNavItems(isAdmin: boolean, unidades: UnidadSlug[]): ModuleNavItem[] {
   return MODULES
-    .filter(m => roleCanAccess(m, role, unidades))
-    .map(({ id, label, icon, allowedRoles, unidad }) => ({ id, label, icon, allowedRoles, unidad }))
+    .filter(m => roleCanAccess(m, isAdmin, unidades))
+    .map(({ id, label, icon, adminOnly, unidad }) => ({ id, label, icon, adminOnly, unidad }))
 }
 
-export function canAccessModule(id: ModuleId, role: UserRole, unidades: UnidadSlug[]): boolean {
+export function canAccessModule(id: ModuleId, isAdmin: boolean, unidades: UnidadSlug[]): boolean {
   const mod = getModule(id)
   if (!mod) return false
-  return roleCanAccess(mod, role, unidades)
+  return roleCanAccess(mod, isAdmin, unidades)
 }

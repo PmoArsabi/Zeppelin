@@ -6,6 +6,6 @@ export const rolesPermisosModule: ModuleDefinition = {
   id: 'roles-permisos',
   label: 'Roles y Permisos',
   icon: <ShieldIcon />,
-  allowedRoles: ['admin'],
+  adminOnly: true,
   component: lazy(() => import('./RolesPermisosModule')),
 }

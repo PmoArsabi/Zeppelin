@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import type { UserRole, UnidadSlug } from '@/context/AuthContext'
+import type { UnidadSlug } from '@/context/AuthContext'
 
 /** Identificador único de cada módulo de la app */
 export type ModuleId = 'solicitudes-corporativos' | 'solicitudes-mice' | 'usuarios' | 'roles-permisos' | 'carga-siigo' | 'anticipos'
@@ -10,7 +10,8 @@ export interface ModuleNavItem {
   id: ModuleId
   label: string
   icon: ReactNode
-  allowedRoles?: UserRole[]
+  /** true = solo administradores globales (independiente de rolesPorUnidad) */
+  adminOnly?: boolean
   unidad?: UnidadSlug
 }
 
@@ -18,9 +19,9 @@ export interface ModuleDefinition {
   id: ModuleId
   label: string
   icon: ReactNode
-  /** Roles que pueden acceder. Undefined = todos los autenticados. */
-  allowedRoles?: UserRole[]
-  /** Unidad de negocio requerida para acceder. Admin ignora esto. */
+  /** true = solo administradores globales pueden acceder. */
+  adminOnly?: boolean
+  /** Unidad de negocio requerida para acceder: el usuario necesita un rol asignado en esa unidad. Admin ignora esto. */
   unidad?: UnidadSlug
   /** Módulo por defecto al iniciar sesión */
   default?: boolean

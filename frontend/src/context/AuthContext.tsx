@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
-export type UserRole = 'admin' | 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero' | 'analista_bsp'
+export type UserRole = 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero' | 'analista_bsp'
 export type UnidadSlug = 'mice' | 'corp' | 'siigo' | 'anticipos'
 
 export interface Permissions {
@@ -13,11 +13,11 @@ export interface Permissions {
   canManageRoles: boolean
 }
 
-function derivePermissions(role: UserRole): Permissions {
+function derivePermissions(isAdmin: boolean): Permissions {
   return {
-    isAdmin:         role === 'admin',
-    canManageUsers:  role === 'admin',
-    canManageRoles:  role === 'admin',
+    isAdmin,
+    canManageUsers: isAdmin,
+    canManageRoles: isAdmin,
   }
 }
 
@@ -25,7 +25,8 @@ interface AuthContextValue {
   user: User | null
   session: Session | null
   loading: boolean
-  role: UserRole
+  /** Rol asignado al usuario en cada unidad — un usuario puede tener roles distintos por unidad. */
+  rolesPorUnidad: Partial<Record<UnidadSlug, UserRole>>
   unidades: UnidadSlug[]
   permissions: Permissions
   isAdmin: boolean
@@ -37,11 +38,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+const TODAS_LAS_UNIDADES: UnidadSlug[] = ['mice', 'corp', 'siigo', 'anticipos']
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [unidades, setUnidades] = useState<UnidadSlug[]>([])
+  const [rolesPorUnidad, setRolesPorUnidad] = useState<Partial<Record<UnidadSlug, UserRole>>>({})
   const [displayName, setDisplayName] = useState('')
   const [permisos, setPermisos] = useState<Set<string>>(new Set())
 
@@ -75,25 +79,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [user])
 
-  // Cargar unidades asignadas al usuario
+  // Cargar rol asignado por unidad — el rol ya no es global, cada unidad puede tener uno distinto.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!user) { setUnidades([]); return }
+    if (!user) { setUnidades([]); setRolesPorUnidad({}); return }
 
-    const rawRole = user.app_metadata?.role
-    if (rawRole === 'admin') {
-      // Admin ve todas las unidades
-      setUnidades(['mice', 'corp'])
+    const isAdmin = user.app_metadata?.role === 'admin'
+    if (isAdmin) {
+      // Admin ve todas las unidades sin rol específico (bypass total en has_permission).
+      setUnidades(TODAS_LAS_UNIDADES)
+      setRolesPorUnidad({})
       return
     }
 
     supabase
-      .rpc('rbac_get_mis_unidades')
+      .rpc('rbac_get_mis_roles_por_unidad')
       .then(({ data }) => {
-        const slugs = (data ?? [])
-          .map((row: { slug: string }) => row.slug)
-          .filter((s: string | undefined): s is UnidadSlug => !!s)
-        setUnidades(slugs)
+        const rows = (data ?? []) as { unidad_slug: string; rol_slug: string }[]
+        const map: Partial<Record<UnidadSlug, UserRole>> = {}
+        for (const row of rows) map[row.unidad_slug as UnidadSlug] = row.rol_slug as UserRole
+        setRolesPorUnidad(map)
+        setUnidades(Object.keys(map) as UnidadSlug[])
       })
   }, [user])
 
@@ -117,16 +123,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
   }, [user])
 
-  const VALID_ROLES: UserRole[] = ['admin', 'coordinador', 'asesor', 'tiqueteador', 'financiero', 'analista_bsp']
-  const rawRole = user?.app_metadata?.role
-  const role: UserRole = VALID_ROLES.includes(rawRole) ? rawRole : 'tiqueteador'
-  const permissions = derivePermissions(role)
+  const isAdmin = user?.app_metadata?.role === 'admin'
+  const permissions = derivePermissions(isAdmin)
 
   // Permisos por unidad — el admin tiene todo; el resto se evalúa en BD via RLS.
   // Esta función es para controles de UI (mostrar/ocultar botones).
   // La seguridad real la hace RLS en el servidor.
   function hasPermission(unidad: UnidadSlug, permiso: string): boolean {
-    if (role === 'admin') return true
+    if (isAdmin) return true
     if (!unidades.includes(unidad)) return false
     return permisos.has(`${unidad}:${permiso}`)
   }
@@ -135,8 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, session, loading, role, unidades, permissions,
-      isAdmin: permissions.isAdmin, displayName: user ? displayName : '', hasPermission, signOut,
+      user, session, loading, rolesPorUnidad, unidades, permissions,
+      isAdmin, displayName: user ? displayName : '', hasPermission, signOut,
     }}>
       {children}
     </AuthContext.Provider>

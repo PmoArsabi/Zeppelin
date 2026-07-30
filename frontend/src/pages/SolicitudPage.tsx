@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchClientesZeppelin } from '@/lib/clientes'
+import { fetchAsesoresCorp } from '@/lib/asesoresCorp'
 import { useAuth } from '../context/AuthContext'
 import AppShell from '../components/layout/AppShell'
 import { Card } from '../components/ui/Card'
@@ -58,6 +59,7 @@ function validate(form: SolicitudForm): Errors {
     e.localizador = 'Solo letras y números, mínimo 3 caracteres, sin espacios.'
   }
   if (!form.cliente) e.cliente = 'Debe seleccionar un cliente válido.'
+  if (!form.asesor) e.asesor = 'Debe seleccionar un asesor.'
   if (form.tiquetes === null) e.tiquetes = 'Requerido.'
   if (form.hoteles === null) e.hoteles = 'Requerido.'
   if (form.transportes === null) e.transportes = 'Requerido.'
@@ -168,6 +170,9 @@ export default function SolicitudPage({
   const [clientes, setClientes] = useState<{ value: string; label: string }[]>([])
   const [clientesLoading, setClientesLoading] = useState(true)
   const [clientesError, setClientesError] = useState<string | null>(null)
+  const [asesores, setAsesores] = useState<{ value: string; label: string }[]>([])
+  const [asesoresLoading, setAsesoresLoading] = useState(true)
+  const [asesoresError, setAsesoresError] = useState<string | null>(null)
   const [formBaseline, setFormBaseline] = useState<SolicitudForm | null>(null)
   const [auditWarning, setAuditWarning] = useState<string | null>(null)
   const [pendingSeguimiento, setPendingSeguimiento] = useState('')
@@ -192,8 +197,19 @@ export default function SolicitudPage({
     })
   }, [])
 
+  // Carga el catálogo de asesores asignables. En edición se incluye el asesor actual aunque
+  // ya no esté activo o haya cambiado de rol, para no perder el valor histórico del registro.
   useEffect(() => {
-    if (!user) return
+    fetchAsesoresCorp(editTarget?.asesor).then(({ data, error }) => {
+      if (error) setAsesoresError(error)
+      setAsesores(data)
+      setAsesoresLoading(false)
+    })
+  }, [editTarget?.asesor])
+
+  // Al crear una solicitud nueva, se sugiere el propio usuario como asesor por defecto (editable).
+  useEffect(() => {
+    if (isEdit || !user) return
     supabase
       .from('td_profiles')
       .select('display_name')
@@ -201,10 +217,10 @@ export default function SolicitudPage({
       .single()
       .then(({ data }) => {
         if (data?.display_name) {
-          setForm(prev => ({ ...prev, asesor: data.display_name }))
+          setForm(prev => (prev.asesor ? prev : { ...prev, asesor: data.display_name }))
         }
       })
-  }, [user])
+  }, [user, isEdit])
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -426,14 +442,16 @@ export default function SolicitudPage({
                         options={clientes}
                       />
                     </FormField>
-                    <FormField label="Asesor" htmlFor="asesor" className="sm:col-span-2 lg:col-span-2">
-                      <Input
+                    <FormField label="Asesor" htmlFor="asesor" error={errors.asesor} className="sm:col-span-2 lg:col-span-2">
+                      <CustomSelect
                         id="asesor"
-                        type="text"
                         value={form.asesor}
-                        readOnly
-                        className="bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 cursor-default"
-                        placeholder="Cargando..."
+                        onChange={v => set('asesor', v)}
+                        placeholder={asesoresLoading ? 'Cargando asesores...' : 'Seleccionar asesor...'}
+                        error={!!errors.asesor}
+                        disabled={fieldDisabled || asesoresLoading || !!asesoresError}
+                        searchable
+                        options={asesores}
                       />
                     </FormField>
                   </div>

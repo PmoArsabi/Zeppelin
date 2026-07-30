@@ -38,29 +38,6 @@ const TABLE = 'th_solicitud_mice'
 
 export type TiqueteadorOption = { value: string; label: string }
 
-type UserWithRolesRow = {
-  id: string
-  display_name: string | null
-  role: string | null
-  disabled: boolean | null
-  unidades: string[] | string | null
-}
-
-function normalizeUnidadSlugs(value: UserWithRolesRow['unidades']): string[] {
-  const raw = Array.isArray(value)
-    ? value
-    : String(value ?? '')
-      .replace(/[{}"]/g, '')
-      .split(',')
-
-  return raw.map(u => u.trim().toLowerCase()).filter(Boolean)
-}
-
-function hasOnlyMiceUnidad(value: UserWithRolesRow['unidades']): boolean {
-  const unidades = normalizeUnidadSlugs(value)
-  return unidades.length === 1 && unidades[0] === 'mice'
-}
-
 /** Perfil NA en td_profiles (valor por defecto del tiqueteador). */
 export function isTiqueteadorNaLabel(label: string): boolean {
   const n = label.trim().toLowerCase().replace(/\s+/g, '')
@@ -349,24 +326,33 @@ export async function saveSolicitudMice(
   return { error: null, id: newId }
 }
 
-export async function fetchUsuariosTiqueteador(): Promise<{
+/**
+ * Tiqueteadores asignables en Solicitud MICE: usuarios activos con rol tiqueteador en la unidad MICE.
+ * Si se pasa `tiqueteadorActual` (id + nombre del registro que se está editando), se incluye aunque
+ * ya no cumpla esos criterios (inactivo o reasignado de rol), para no perder el valor histórico.
+ */
+export async function fetchUsuariosTiqueteador(
+  tiqueteadorActual?: { id: string; nombre: string }
+): Promise<{
   data: { value: string; label: string }[]
   error: string | null
 }> {
-  const { data, error } = await supabase.rpc('list_users_with_roles')
+  const { data, error } = await supabase.rpc('rbac_get_tiqueteadores_mice')
 
   if (error) return { data: [], error: error.message }
 
-  const list = sortTiqueteadorOptions(
-    ((data ?? []) as UserWithRolesRow[])
+  const map = new Map<string, string>(
+    ((data ?? []) as { id: string; display_name: string }[])
       .filter(row => Boolean(row.display_name?.trim()))
-      .filter(row => row.disabled !== true)
-      .filter(row => row.role?.trim().toLowerCase() === 'tiqueteador')
-      .filter(row => hasOnlyMiceUnidad(row.unidades))
-      .map(row => ({
-        value: row.id,
-        label: row.display_name!.trim(),
-      }))
+      .map(row => [row.id, row.display_name.trim()])
+  )
+
+  if (tiqueteadorActual?.id && tiqueteadorActual.nombre.trim()) {
+    map.set(tiqueteadorActual.id, tiqueteadorActual.nombre.trim())
+  }
+
+  const list = sortTiqueteadorOptions(
+    [...map.entries()].map(([value, label]) => ({ value, label }))
   )
 
   return { data: list, error: null }
