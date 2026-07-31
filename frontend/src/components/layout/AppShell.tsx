@@ -44,10 +44,10 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 export default function AppShell({ children, activeModule = 'solicitudes-mice', onNavigate }: AppShellProps) {
-  const { user, signOut, isAdmin, rolesPorUnidad, unidades } = useAuth()
+  const { user, signOut, isAdmin, rolesPorUnidad, unidades, hasPowerbiInformes } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const navItems = getNavItems(isAdmin, unidades)
+  const navItems = getNavItems(isAdmin, unidades, hasPowerbiInformes)
 
   const roleSummary = isAdmin
     ? 'Administrador'

@@ -6,15 +6,15 @@ import ModulePageSkeleton from '@/components/ui/ModulePageSkeleton'
 import type { ModuleHostProps } from './types'
 
 export default function ModuleHost({ activeModule, onNavigate, instanceKey = 0 }: ModuleHostProps) {
-  const { isAdmin, unidades } = useAuth()
+  const { isAdmin, unidades, hasPowerbiInformes } = useAuth()
 
   const accessibleDefault = () => {
-    const items = getNavItems(isAdmin, unidades)
+    const items = getNavItems(isAdmin, unidades, hasPowerbiInformes)
     const firstId = items[0]?.id
     return firstId ? getModule(firstId) : MODULES[0]
   }
 
-  const mod = canAccessModule(activeModule, isAdmin, unidades)
+  const mod = canAccessModule(activeModule, isAdmin, unidades, hasPowerbiInformes)
     ? getModule(activeModule)
     : accessibleDefault()
 

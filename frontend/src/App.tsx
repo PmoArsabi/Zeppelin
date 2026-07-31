@@ -5,7 +5,7 @@ import LoginPage from '@/pages/LoginPage'
 import { ModuleHost, type ModuleId, getNavItems } from '@/modules'
 
 export default function App() {
-  const { user, loading, isAdmin, unidades } = useAuth()
+  const { user, loading, isAdmin, unidades, hasPowerbiInformes } = useAuth()
   const [activeModule, setActiveModule] = useState<ModuleId | null>(null)
   const [moduleInstanceKey, setModuleInstanceKey] = useState(0)
 
@@ -17,7 +17,7 @@ export default function App() {
   if (loading) return <Spinner />
   if (!user) return <LoginPage />
 
-  const firstAccessible = getNavItems(isAdmin, unidades)[0]?.id ?? 'solicitudes-mice'
+  const firstAccessible = getNavItems(isAdmin, unidades, hasPowerbiInformes)[0]?.id ?? 'solicitudes-mice'
   const resolvedModule = (activeModule ?? firstAccessible) as ModuleId
 
   return (

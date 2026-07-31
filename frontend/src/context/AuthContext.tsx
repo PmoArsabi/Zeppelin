@@ -30,6 +30,8 @@ interface AuthContextValue {
   unidades: UnidadSlug[]
   permissions: Permissions
   isAdmin: boolean
+  /** true si el usuario tiene al menos un informe de PowerBI asignado (o es admin) — controla la visibilidad del módulo en el sidebar. */
+  hasPowerbiInformes: boolean
   /** Nombre para mostrar del usuario logueado (de td_profiles). Fallback: email. */
   displayName: string
   hasPermission: (unidad: UnidadSlug, permiso: string) => boolean
@@ -48,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [rolesPorUnidad, setRolesPorUnidad] = useState<Partial<Record<UnidadSlug, UserRole>>>({})
   const [displayName, setDisplayName] = useState('')
   const [permisos, setPermisos] = useState<Set<string>>(new Set())
+  const [hasPowerbiInformes, setHasPowerbiInformes] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -123,6 +126,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
   }, [user])
 
+  // Visibilidad del módulo Informes PowerBI en el sidebar: admin siempre lo ve;
+  // el resto, solo si tiene al menos un informe asignado según su rol por unidad.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!user) { setHasPowerbiInformes(false); return }
+
+    if (user.app_metadata?.role === 'admin') {
+      setHasPowerbiInformes(true)
+      return
+    }
+
+    supabase
+      .rpc('powerbi_get_mis_informes')
+      .then(({ data }) => setHasPowerbiInformes((data ?? []).length > 0))
+  }, [user])
+
   const isAdmin = user?.app_metadata?.role === 'admin'
   const permissions = derivePermissions(isAdmin)
 
@@ -140,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, loading, rolesPorUnidad, unidades, permissions,
-      isAdmin, displayName: user ? displayName : '', hasPermission, signOut,
+      isAdmin, hasPowerbiInformes, displayName: user ? displayName : '', hasPermission, signOut,
     }}>
       {children}
     </AuthContext.Provider>
