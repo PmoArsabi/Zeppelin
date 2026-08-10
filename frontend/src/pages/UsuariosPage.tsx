@@ -5,6 +5,7 @@ import AppShell from '../components/layout/AppShell'
 import Button from '../components/ui/Button'
 import PageTitle from '../components/ui/PageTitle'
 import Alert from '../components/ui/Alert'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 import FormField from '../components/ui/FormField'
 import Input from '../components/ui/Input'
 import CustomSelect from '../components/ui/CustomSelect'
@@ -19,6 +20,7 @@ interface UserRow {
   created_at: string
   disabled: boolean
   roles_por_unidad: Record<string, string>
+  pending_activation: boolean
 }
 
 type RoleOption = 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero' | 'analista_bsp'
@@ -114,7 +116,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   const [form, setForm]             = useState<NewUserForm>(EMPTY_FORM)
   const [errors, setErrors]         = useState<Partial<Record<'display_name' | 'email' | 'password' | 'roles', string>>>({})
   const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ variant: 'success' | 'error'; message: string } | null>(null)
 
   const set = <K extends keyof NewUserForm>(key: K, value: NewUserForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -136,7 +138,6 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitError(null)
     if (!validate()) return
     setSubmitting(true)
     try {
@@ -163,12 +164,31 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Error al crear el usuario.')
       onCreated()
-      onClose()
+      setResult({
+        variant: 'success',
+        message: form.password.trim()
+          ? 'El usuario fue creado correctamente y ya puede iniciar sesión.'
+          : 'El usuario fue creado correctamente y se le envió un correo de invitación.',
+      })
     } catch (err: unknown) {
-      setSubmitError(err instanceof Error ? err.message : 'Error desconocido.')
+      setResult({ variant: 'error', message: err instanceof Error ? err.message : 'Error desconocido.' })
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (result) {
+    return (
+      <ConfirmDialog
+        variant={result.variant}
+        title={result.variant === 'success' ? 'Usuario creado' : 'No se pudo crear el usuario'}
+        message={result.message}
+        onClose={() => {
+          setResult(null)
+          if (result.variant === 'success') onClose()
+        }}
+      />
+    )
   }
 
   return (
@@ -185,8 +205,6 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           </button>
         </div>
         <form onSubmit={handleSubmit} noValidate className="px-6 py-5 space-y-4">
-          {submitError && <Alert variant="error">{submitError}</Alert>}
-
           {form.password
             ? (
               <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-sm text-amber-700 dark:text-amber-300">
@@ -452,9 +470,10 @@ export default function UsuariosPage({ onNavigate }: Props) {
   const [users, setUsers]           = useState<UserRow[]>([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing]       = useState<UserRow | null>(null)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [dialog, setDialog] = useState<{ variant: 'success' | 'error'; title: string; message: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -467,11 +486,6 @@ export default function UsuariosPage({ onNavigate }: Props) {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
-
-  const flash = (msg: string) => {
-    setSuccessMsg(msg)
-    setTimeout(() => setSuccessMsg(null), 4000)
-  }
 
   const handleQuickToggle = async (u: UserRow) => {
     if (me?.id === u.id) return
@@ -491,7 +505,6 @@ export default function UsuariosPage({ onNavigate }: Props) {
       )
       if (res.ok) {
         setUsers(prev => prev.map(x => x.id === u.id ? { ...x, disabled: !u.disabled } : x))
-        flash(u.disabled ? `${u.display_name} activado.` : `${u.display_name} inactivado.`)
       } else {
         const json = await res.json()
         setError(json.error ?? 'Error al cambiar estado.')
@@ -501,13 +514,47 @@ export default function UsuariosPage({ onNavigate }: Props) {
     }
   }
 
+  const handleResendInvite = async (u: UserRow) => {
+    setResendingId(u.id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session!.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ user_id: u.id, action: 'resend_invite', origin: window.location.origin }),
+        }
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error al reenviar la invitación.')
+      setDialog({
+        variant: 'success',
+        title: 'Correo enviado',
+        message: `Se reenvió correctamente el correo de invitación a ${u.email}.`,
+      })
+    } catch (err: unknown) {
+      setDialog({
+        variant: 'error',
+        title: 'No se pudo enviar el correo',
+        message: err instanceof Error ? err.message : 'Error de conexión.',
+      })
+    } finally {
+      setResendingId(null)
+    }
+  }
+
 
   return (
     <AppShell activeModule="usuarios" onNavigate={onNavigate}>
       {showCreate && (
         <CreateModal
           onClose={() => setShowCreate(false)}
-          onCreated={() => { load(); flash('Usuario creado correctamente.') }}
+          onCreated={load}
         />
       )}
       {editing && (
@@ -516,8 +563,15 @@ export default function UsuariosPage({ onNavigate }: Props) {
           onClose={() => setEditing(null)}
           onSaved={patch => {
             setUsers(prev => prev.map(u => u.id === editing.id ? { ...u, ...patch } : u))
-            flash('Usuario actualizado.')
           }}
+        />
+      )}
+      {dialog && (
+        <ConfirmDialog
+          variant={dialog.variant}
+          title={dialog.title}
+          message={dialog.message}
+          onClose={() => setDialog(null)}
         />
       )}
 
@@ -537,8 +591,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
           </Button>
         </div>
 
-        {successMsg && <Alert variant="success" className="mb-5">{successMsg}</Alert>}
-        {error      && <Alert variant="error"   className="mb-5">{error}</Alert>}
+        {error && <Alert variant="error" className="mb-5">{error}</Alert>}
 
         {loading ? (
           <div className="flex justify-center items-center py-24">
@@ -598,6 +651,30 @@ export default function UsuariosPage({ onNavigate }: Props) {
                                 d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
+                          {/* Reenviar invitación */}
+                          {u.pending_activation && (
+                            <button
+                              onClick={() => handleResendInvite(u)}
+                              disabled={resendingId === u.id}
+                              title="Reenviar invitación"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors
+                                         text-slate-400 hover:text-indigo-600 hover:bg-indigo-50
+                                         dark:hover:text-indigo-400 dark:hover:bg-indigo-500/10
+                                         disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {resendingId === u.id ? (
+                                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                </svg>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                              )}
+                            </button>
+                          )}
                           {/* Inactivar / Activar */}
                           {me?.id !== u.id && (
                             <button
@@ -665,6 +742,29 @@ export default function UsuariosPage({ onNavigate }: Props) {
                       </svg>
                       Editar
                     </button>
+                    {u.pending_activation && (
+                      <button
+                        onClick={() => handleResendInvite(u)}
+                        disabled={resendingId === u.id}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl
+                                   text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10
+                                   hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors
+                                   disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {resendingId === u.id ? (
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                        Reenviar
+                      </button>
+                    )}
                     {me?.id !== u.id && (
                       <button
                         onClick={() => handleQuickToggle(u)}
