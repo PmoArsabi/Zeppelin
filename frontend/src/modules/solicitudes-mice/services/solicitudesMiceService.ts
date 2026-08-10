@@ -21,6 +21,10 @@ import { registrarAuditoriaEdicion } from '@/lib/auditoria/logAuditoriaService'
 import { fetchMiceCatalogos } from './miceCatalogosService'
 import { resolveNextMzpCode } from './mzpConsecutivoService'
 import { buildClienteNombreById, fetchClientesByIds } from '@/lib/clientes'
+import {
+  buildClienteProvisionalNombreById,
+  fetchClientesProvisionalesByIds,
+} from './clientesProvisionalesMiceService'
 import { formatSectorNombre } from '../lib/formatSectorMice'
 import {
   pickEstadoIdForSave,
@@ -94,6 +98,7 @@ export function formToPayload(
     responsable_id: form.responsable_id.trim() || userId,
     anio: form.anio,
     cliente_id: form.cliente_id,
+    cliente_provisional_id: form.cliente_provisional_id,
     sector_id: sectorId,
     mzp: (() => {
       const code = mzpFromSuffix(mzpSuffix(form.mzp))
@@ -121,7 +126,8 @@ export function rowToForm(
   catalog?: MiceCatalogos,
   relaciones?: SolicitudMiceRelaciones | null,
   clienteNombreById?: Map<number, string>,
-  profileNombreById?: Map<string, string>
+  profileNombreById?: Map<string, string>,
+  clienteProvisionalNombreById?: Map<number, string>
 ): SolicitudMiceForm {
   const cat = catalog ?? MICE_CATALOGOS_VACIOS
   const anios = cat.anios
@@ -154,7 +160,7 @@ export function rowToForm(
           probabilidad_id: probabilidadId,
           probabilidad: resolveProbabilidadNombre(probabilidadId, cat, row.probabilidad),
         }
-      : enrichMiceRowDisplay(rowDb, cat, { clienteNombreById, profileNombreById })
+      : enrichMiceRowDisplay(rowDb, cat, { clienteNombreById, clienteProvisionalNombreById, profileNombreById })
 
   return {
     anio: anios.includes(enriched.anio) ? enriched.anio : anioDefault,
@@ -162,6 +168,7 @@ export function rowToForm(
     responsable_nombre: enriched.responsable_nombre,
     cliente_id: enriched.cliente_id ?? null,
     cliente: enriched.cliente,
+    cliente_provisional_id: enriched.cliente_provisional_id ?? null,
     sector_id: enriched.sector_id ?? null,
     sector: enriched.sector ?? '',
     mzp: enriched.mzp ?? '',
@@ -212,17 +219,24 @@ export async function listSolicitudesMice(
   const clienteIds = Array.from(new Set(
     (data as SolicitudMiceRowDb[])
       .map(r => r.cliente_id)
+      .filter((id): id is number => id != null && id !== 0)
+  ))
+  const clienteProvisionalIds = Array.from(new Set(
+    (data as SolicitudMiceRowDb[])
+      .map(r => r.cliente_provisional_id)
       .filter((id): id is number => id != null)
   ))
 
-  const [{ data: catalogData }, { data: clientesCatalog }, profileNombreById] = await Promise.all([
+  const [{ data: catalogData }, { data: clientesCatalog }, { data: provisionalesCatalog }, profileNombreById] = await Promise.all([
     fetchMiceCatalogos(),
     fetchClientesByIds(clienteIds),
+    fetchClientesProvisionalesByIds(clienteProvisionalIds),
     fetchProfileNombreById(),
   ])
   const clienteNombreById = buildClienteNombreById(clientesCatalog)
+  const clienteProvisionalNombreById = buildClienteProvisionalNombreById(provisionalesCatalog)
   const rows = (data as SolicitudMiceRowDb[]).map(r =>
-    enrichMiceRowDisplay(r, catalogData, { clienteNombreById, profileNombreById })
+    enrichMiceRowDisplay(r, catalogData, { clienteNombreById, clienteProvisionalNombreById, profileNombreById })
   )
 
   return { data: rows, error: null }

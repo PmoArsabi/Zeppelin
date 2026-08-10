@@ -11,6 +11,8 @@ import {
 } from '../lib/etapasMice'
 import { buildClienteNombreById, fetchClientesZeppelinCatalog } from '@/lib/clientes'
 import ClienteCustomSelect from '@/components/ui/ClienteCustomSelect'
+import { crearClienteProvisionalMice } from '../services/clientesProvisionalesMiceService'
+import CrearClienteProvisionalModal from '../components/CrearClienteProvisionalModal'
 import { formatDecimalCO, parseDecimalCO } from '@/lib/decimalFormat'
 import { useAuth } from '@/context/AuthContext'
 import { Card } from '@/components/ui/Card'
@@ -70,6 +72,9 @@ function validate(form: SolicitudMiceForm, catalog: MiceCatalogos, etapa: EtapaM
   if (!catalog.anios.includes(form.anio)) e.anio = 'Seleccione un año válido.'
   if (!form.responsable_id.trim()) e.responsable_id = 'Seleccione un responsable.'
   if (form.cliente_id == null) e.cliente_id = 'Seleccione un cliente.'
+  else if (seccionCierre && form.cliente_id === 0) {
+    e.cliente_id = 'El cliente sigue provisional. Reemplácelo por un cliente real antes de "En cierre".'
+  }
   if (form.sector_id == null && !form.sector.trim()) e.sector = 'Seleccione un sector.'
   if (!form.nombre.trim()) e.nombre = 'El nombre del evento es obligatorio.'
   if (form.estado_id == null && !form.estado.trim()) e.estado = 'Seleccione un estado.'
@@ -241,7 +246,7 @@ export default function SolicitudMiceFormPage({
   onSaved,
   onCancel,
 }: Props) {
-  const { user, displayName: currentUserName, isAdmin } = useAuth()
+  const { user, displayName: currentUserName, isAdmin, hasPermission } = useAuth()
   const isEdit = editTarget !== null
   const lock = readOnly
   const mzpAuto = !isEdit && !lock
@@ -271,6 +276,7 @@ export default function SolicitudMiceFormPage({
   const [mzpLoading, setMzpLoading] = useState(false)
   const [facturasClienteMismatch, setFacturasClienteMismatch] = useState(false)
   const [totalFacturado, setTotalFacturado] = useState<number | null>(null)
+  const [showCrearProvisional, setShowCrearProvisional] = useState(false)
 
   const formBusy = saveFeedback !== null
   const isSaving = saveFeedback?.status === 'saving'
@@ -296,6 +302,8 @@ export default function SolicitudMiceFormPage({
 
   const tieneTiquetes = form.servicios.includes('SRV-01')
   const effectiveLock = lock
+  /** Cliente: bloqueado como el resto del registro, salvo que siga provisional (debe poder corregirse). */
+  const clienteFieldDisabled = effectiveLock || (lockRegistro && form.cliente_provisional_id == null)
   /** El responsable solo puede modificarse al crear, o por un administrador */
   const lockResponsable = isEdit && !lock && !isAdmin
   /** En operación y posterior: valor cotizado, utilidad proyectada y fecha entrega son de solo lectura */
@@ -316,6 +324,8 @@ export default function SolicitudMiceFormPage({
     if (!siguiente) return false
     // Ninguna factura asociada puede pertenecer a otro cliente
     if (facturasClienteMismatch) return false
+    // El cliente provisional (cliente_id=0) debe reemplazarse por uno real antes de "En cierre"
+    if (siguiente === 'en_cierre' && form.cliente_id === 0) return false
     // Para avanzar a cotizacion_enviada: valor, utilidad y probabilidad obligatorios
     if (siguiente === 'cotizacion_enviada') {
       const valorOk = !!form.valor_cotizado.trim() && parseDecimalCO(form.valor_cotizado) != null
@@ -339,7 +349,7 @@ export default function SolicitudMiceFormPage({
       return true
     }
     return true
-  }, [etapaActual, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real, form.facturas, facturasClienteMismatch, totalFacturado])
+  }, [etapaActual, form.cliente_id, form.valor_cotizado, form.utilidad_proyectada, form.probabilidad_id, form.probabilidad, form.valor_final_aprobado, form.utilidad_real, form.facturas, facturasClienteMismatch, totalFacturado])
 
   useEffect(() => {
     if (saveFeedback?.status !== 'success') return
@@ -653,6 +663,14 @@ const estadoOptions = useMemo(() => {
     const estadoSiguiente = catalog.estados.find(e => codigoToEtapa(e.codigo) === siguiente)
     if (!estadoSiguiente) return
 
+    if (siguiente === 'en_cierre' && form.cliente_id === 0) {
+      const msg = 'El cliente sigue provisional. Reemplácelo por un cliente real antes de avanzar a "En cierre".'
+      setErrors({ cliente_id: msg })
+      setActiveTab('cotizacion')
+      setSubmitError(msg)
+      return
+    }
+
     const formAvanzado: SolicitudMiceForm = {
       ...form,
       estado_id: estadoSiguiente.id,
@@ -801,17 +819,53 @@ const estadoOptions = useMemo(() => {
           >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <FormField label="Cliente" required htmlFor="cliente_id" error={errors.cliente_id}
-                  className="sm:col-span-2 lg:col-span-2 min-w-0">
+                  className="sm:col-span-2 lg:col-span-2 min-w-0"
+                  action={
+                    !clienteFieldDisabled && hasPermission('mice', 'crear') && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCrearProvisional(true)}
+                        title="Cliente aún no registrado en Xmart: crear provisional"
+                        aria-label="Crear cliente provisional"
+                        className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full
+                                   bg-rose-600 hover:bg-rose-700 text-white transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    )
+                  }>
                   <ClienteCustomSelect
-                    value={form.cliente_id}
-                    onChange={(id, fullname) => {
-                      setForm(prev => ({ ...prev, cliente_id: id, cliente: fullname }))
+                    clienteId={form.cliente_id}
+                    clienteProvisionalId={form.cliente_provisional_id}
+                    onChange={sel => {
+                      setForm(prev => ({
+                        ...prev,
+                        cliente_id: sel.clienteId,
+                        cliente: sel.nombre,
+                        cliente_provisional_id: sel.clienteProvisionalId,
+                      }))
                       if (errors.cliente_id) setErrors(prev => ({ ...prev, cliente_id: undefined }))
                     }}
                     error={!!errors.cliente_id}
-                    disabled={effectiveLock || lockRegistro}
+                    disabled={clienteFieldDisabled}
                   />
                 </FormField>
+                {showCrearProvisional && (
+                  <CrearClienteProvisionalModal
+                    onCancel={() => setShowCrearProvisional(false)}
+                    onCreate={async nombre => {
+                      if (!user) return 'No se pudo identificar al usuario.'
+                      const { data, error } = await crearClienteProvisionalMice(nombre, user.id)
+                      if (error || !data) return error ?? 'No se pudo crear el cliente provisional.'
+                      setForm(prev => ({ ...prev, cliente_id: 0, cliente: `${data.nombre} (provisional)`, cliente_provisional_id: data.id }))
+                      if (errors.cliente_id) setErrors(prev => ({ ...prev, cliente_id: undefined }))
+                      setShowCrearProvisional(false)
+                      return null
+                    }}
+                  />
+                )}
                 <FormField label="Sector" htmlFor="sector" required error={errors.sector} className="lg:col-span-1 min-w-0">
                   <CustomSelect
                     id="sector"

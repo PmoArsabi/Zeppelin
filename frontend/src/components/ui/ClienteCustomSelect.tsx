@@ -1,11 +1,28 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { searchClientesZeppelin, fetchClienteById } from '@/lib/clientes'
-import type { ClienteZeppelin } from '@/lib/clientes'
+import {
+  searchClientesProvisionalesMice,
+  fetchClienteProvisionalById,
+} from '@/modules/solicitudes-mice/services/clientesProvisionalesMiceService'
+
+export interface ClienteSeleccion {
+  clienteId: number | null
+  clienteProvisionalId: number | null
+  /** Nombre visible; incluye el sufijo "(provisional)" cuando aplica. */
+  nombre: string
+}
+
+interface ClienteOpcion {
+  id: number
+  nombre: string
+  provisional: boolean
+}
 
 interface Props {
-  value: number | null
-  onChange: (id: number | null, fullname: string) => void
+  clienteId: number | null
+  clienteProvisionalId: number | null
+  onChange: (seleccion: ClienteSeleccion) => void
   disabled?: boolean
   error?: boolean
   placeholder?: string
@@ -15,12 +32,23 @@ interface DropdownPos { top: number; left: number; width: number }
 
 const DEBOUNCE_MS = 300
 
-export default function ClienteCustomSelect({ value, onChange, disabled, error, placeholder = 'Seleccionar cliente...' }: Props) {
+function sufijoProvisional(nombre: string, provisional: boolean): string {
+  return provisional ? `${nombre} (provisional)` : nombre
+}
+
+export default function ClienteCustomSelect({
+  clienteId,
+  clienteProvisionalId,
+  onChange,
+  disabled,
+  error,
+  placeholder = 'Seleccionar cliente...',
+}: Props) {
   const [open, setOpen]           = useState(false)
   const [query, setQuery]         = useState('')
-  const [options, setOptions]     = useState<ClienteZeppelin[]>([])
+  const [options, setOptions]     = useState<ClienteOpcion[]>([])
   const [loading, setLoading]     = useState(false)
-  const [selected, setSelected]   = useState<ClienteZeppelin | null>(null)
+  const [selected, setSelected]   = useState<ClienteOpcion | null>(null)
   const [pos, setPos]             = useState<DropdownPos | null>(null)
 
   const btnRef    = useRef<HTMLButtonElement>(null)
@@ -28,23 +56,43 @@ export default function ClienteCustomSelect({ value, onChange, disabled, error, 
   const inputRef  = useRef<HTMLInputElement>(null)
   const debounce  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // El cliente mostrado se deriva del value: si no coincide con lo resuelto, aún no hay selección visible.
-  const current = value != null && selected?.id === value ? selected : null
+  const current =
+    selected &&
+    ((selected.provisional && selected.id === clienteProvisionalId) ||
+      (!selected.provisional && selected.id === clienteId))
+      ? selected
+      : null
 
-  // Resolver el cliente seleccionado por ID al montar o cuando cambia value
+  // Resolver el cliente seleccionado (real o provisional) al montar o cuando cambian los ids
   useEffect(() => {
-    if (value == null || selected?.id === value) return
     let cancelled = false
-    fetchClienteById(value).then(c => {
-      if (!cancelled) setSelected(c)
-    })
+    if (clienteProvisionalId != null) {
+      if (selected?.provisional && selected.id === clienteProvisionalId) return
+      fetchClienteProvisionalById(clienteProvisionalId).then(c => {
+        if (!cancelled) setSelected(c ? { id: c.id, nombre: c.nombre, provisional: true } : null)
+      })
+    } else if (clienteId != null && clienteId !== 0) {
+      if (selected && !selected.provisional && selected.id === clienteId) return
+      fetchClienteById(clienteId).then(c => {
+        if (!cancelled) setSelected(c ? { id: c.id, nombre: c.fullname, provisional: false } : null)
+      })
+    } else {
+      setSelected(null)
+    }
     return () => { cancelled = true }
-  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clienteId, clienteProvisionalId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadOptions = useCallback(async (q: string) => {
     setLoading(true)
-    const { data } = await searchClientesZeppelin(q)
-    setOptions(data)
+    const [{ data: reales }, { data: provisionales }] = await Promise.all([
+      searchClientesZeppelin(q),
+      searchClientesProvisionalesMice(q),
+    ])
+    const combinadas: ClienteOpcion[] = [
+      ...reales.map(c => ({ id: c.id, nombre: c.fullname, provisional: false })),
+      ...provisionales.map(c => ({ id: c.id, nombre: c.nombre, provisional: true })),
+    ].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    setOptions(combinadas)
     setLoading(false)
   }, [])
 
@@ -65,16 +113,20 @@ export default function ClienteCustomSelect({ value, onChange, disabled, error, 
     debounce.current = setTimeout(() => loadOptions(q), DEBOUNCE_MS)
   }
 
-  const select = (c: ClienteZeppelin) => {
+  const select = (c: ClienteOpcion) => {
     setSelected(c)
-    onChange(c.id, c.fullname)
+    onChange({
+      clienteId: c.provisional ? 0 : c.id,
+      clienteProvisionalId: c.provisional ? c.id : null,
+      nombre: sufijoProvisional(c.nombre, c.provisional),
+    })
     close()
   }
 
   const clear = (e: React.MouseEvent) => {
     e.stopPropagation()
     setSelected(null)
-    onChange(null, '')
+    onChange({ clienteId: null, clienteProvisionalId: null, nombre: '' })
   }
 
   // Cerrar al click fuera
@@ -140,21 +192,27 @@ export default function ClienteCustomSelect({ value, onChange, disabled, error, 
         ) : options.length === 0 ? (
           <li className="px-4 py-3 text-sm text-slate-400 dark:text-slate-500 text-center">Sin resultados</li>
         ) : (
-          options.map(c => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => select(c)}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors duration-100
-                  ${value === c.id
-                    ? 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-medium'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
-                  }`}
-              >
-                {c.fullname}
-              </button>
-            </li>
-          ))
+          options.map(c => {
+            const isSelected = c.provisional ? c.id === clienteProvisionalId : c.id === clienteId
+            return (
+              <li key={`${c.provisional ? 'p' : 'r'}-${c.id}`}>
+                <button
+                  type="button"
+                  onClick={() => select(c)}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors duration-100
+                    ${isSelected
+                      ? 'bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-medium'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
+                    }`}
+                >
+                  {c.nombre}
+                  {c.provisional && (
+                    <span className="text-amber-600 dark:text-amber-400"> (provisional)</span>
+                  )}
+                </button>
+              </li>
+            )
+          })
         )}
       </ul>
       {!loading && options.length > 0 && (
@@ -184,7 +242,16 @@ export default function ClienteCustomSelect({ value, onChange, disabled, error, 
           }
           ${current ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}
       >
-        <span className="truncate">{current ? current.fullname : placeholder}</span>
+        <span className="truncate">
+          {current ? (
+            <>
+              {current.nombre}
+              {current.provisional && (
+                <span className="text-amber-600 dark:text-amber-400"> (provisional)</span>
+              )}
+            </>
+          ) : placeholder}
+        </span>
         <div className="flex items-center gap-2 shrink-0 ml-2">
           {current && !disabled && (
             <span

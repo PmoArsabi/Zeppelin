@@ -38,10 +38,12 @@ export interface SolicitudMiceForm {
   anio: number
   responsable_id: string
   responsable_nombre: string
-  /** Fuente de verdad: raw.xmart_clientes_zeppelin.customerid */
+  /** Fuente de verdad: raw.xmart_clientes_zeppelin.customerid. 0 = cliente provisional pendiente de confirmar. */
   cliente_id: number | null
-  /** Nombre visible (auditoría / UI); resuelto desde cliente_id */
+  /** Nombre visible (auditoría / UI); resuelto desde cliente_id o cliente_provisional_id */
   cliente: string
+  /** Si el cliente aún no existe en Xmart: raw.clientes_provisional_mice.id_provisional */
+  cliente_provisional_id: number | null
   /** Nombre visible (auditoría / UI); fuente de verdad: sector_id */
   sector: string
   sector_id: number | null
@@ -79,6 +81,7 @@ export const INITIAL_FORM_MICE = (): SolicitudMiceForm => ({
   responsable_nombre: '',
   cliente_id: null,
   cliente: '',
+  cliente_provisional_id: null,
   sector: '',
   sector_id: null,
   mzp: '',
@@ -112,6 +115,7 @@ export interface SolicitudMiceRowDb {
   anio: number
   responsable_id: string
   cliente_id: number | null
+  cliente_provisional_id: number | null
   sector_id: number | null
   mzp: string | null
   nombre: string

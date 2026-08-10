@@ -10,6 +10,8 @@ interface FormFieldProps {
   children: React.ReactNode
   className?: string
   counter?: { current: number; max: number }
+  /** Contenido a la derecha del label (ej. botón de acción rápida) */
+  action?: React.ReactNode
 }
 
 export default function FormField({
@@ -22,12 +24,16 @@ export default function FormField({
   children,
   className = '',
   counter,
+  action,
 }: FormFieldProps) {
   return (
     <div className={`flex flex-col gap-0 ${className}`}>
-      <Label htmlFor={htmlFor} required={required} optional={optional}>
-        {label}
-      </Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={htmlFor} required={required} optional={optional}>
+          {label}
+        </Label>
+        {action}
+      </div>
       {children}
       <div className="flex items-start justify-between mt-1.5 min-h-4">
         <div>

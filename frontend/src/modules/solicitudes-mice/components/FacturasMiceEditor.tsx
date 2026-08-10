@@ -102,7 +102,10 @@ export default function FacturasMiceEditor({
     onChange(value.filter((_, i) => i !== idx))
   }
 
+  const clienteEsProvisional = clienteId === 0
+
   const addRow = () => {
+    if (clienteEsProvisional) return
     onChange([...value, { numero: '', recibo_caja_numero: null, anticipo: false }])
   }
 
@@ -299,17 +302,29 @@ export default function FacturasMiceEditor({
       )}
 
       {!readOnly && (
-        <button
-          type="button"
-          onClick={addRow}
-          className="text-xs font-medium px-3 py-1.5 rounded-lg
-                     border border-dashed border-slate-300 dark:border-slate-600
-                     text-slate-500 dark:text-slate-400
-                     hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400
-                     transition-colors"
-        >
-          + Agregar fila
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={addRow}
+            disabled={clienteEsProvisional}
+            title={clienteEsProvisional ? 'El cliente sigue provisional. Reemplácelo por un cliente real para agregar facturas.' : undefined}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg
+                       border border-dashed border-slate-300 dark:border-slate-600
+                       text-slate-500 dark:text-slate-400
+                       hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400
+                       transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-300 disabled:hover:text-slate-500"
+          >
+            + Agregar fila
+          </button>
+          {clienteEsProvisional && (
+            <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              </svg>
+              El cliente sigue provisional. Reemplácelo por un cliente real para agregar facturas.
+            </p>
+          )}
+        </>
       )}
 
       {detalleAbierto && (
