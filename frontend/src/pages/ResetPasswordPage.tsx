@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { leaveResetPasswordPath } from '../lib/appUrl'
+import { getAuthEmailOrigin } from '../lib/appUrl'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
 import Alert from '../components/ui/Alert'
@@ -15,27 +16,28 @@ const MIN_PASSWORD_LENGTH = 8
 export default function ResetPasswordPage() {
   const { theme, toggle } = useTheme()
   const { user, session, clearPasswordRecovery } = useAuth()
+  const navigate = useNavigate()
   const [ready, setReady] = useState(() => Boolean(user || session))
-  const [linkError, setLinkError] = useState<string | null>(null)
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [checkingLink, setCheckingLink] = useState(() => !user && !session)
 
   useEffect(() => {
     if (user || session) {
       setReady(true)
-      setLinkError(null)
+      setCheckingLink(false)
       return
     }
 
     let resolved = false
-
     const markReady = () => {
       resolved = true
       setReady(true)
-      setLinkError(null)
+      setCheckingLink(false)
     }
 
     supabase.auth.getSession().then(({ data }) => {
@@ -47,10 +49,8 @@ export default function ResetPasswordPage() {
     })
 
     const timeout = window.setTimeout(() => {
-      if (!resolved) {
-        setLinkError('El enlace no es válido o ya expiró. Solicita uno nuevo desde el inicio de sesión.')
-      }
-    }, 4000)
+      if (!resolved) setCheckingLink(false)
+    }, 2500)
 
     return () => {
       subscription.unsubscribe()
@@ -58,7 +58,25 @@ export default function ResetPasswordPage() {
     }
   }, [user, session])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRequestLink = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setMessage(null)
+    setLoading(true)
+    try {
+      const { error: fnError } = await supabase.functions.invoke('request-password-reset', {
+        body: { email, origin: getAuthEmailOrigin() },
+      })
+      if (fnError) throw fnError
+      setMessage('Enlace enviado. Revisa tu bandeja de entrada.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error desconocido')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setMessage(null)
@@ -76,19 +94,23 @@ export default function ResetPasswordPage() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password })
       if (updateError) throw updateError
-      setMessage('Contraseña actualizada. Entrando…')
-      leaveResetPasswordPath()
+      setMessage('Contraseña actualizada.')
       clearPasswordRecovery()
+      navigate('/', { replace: true })
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : 'Error desconocido'
-      setError(raw)
+      setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
       setLoading(false)
     }
   }
 
+  const showPasswordForm = ready && Boolean(user || session)
+
   return (
-    <div className="login-page relative min-h-screen flex items-center justify-center px-4 py-12 transition-colors duration-300 overflow-hidden">
+    <div
+      data-page="reset-password"
+      className="login-page relative min-h-screen flex items-center justify-center px-4 py-12 transition-colors duration-300 overflow-hidden"
+    >
       <button
         onClick={toggle}
         title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
@@ -116,21 +138,21 @@ export default function ResetPasswordPage() {
           <div className="flex flex-col items-center justify-center gap-3 mb-7 text-center">
             <BrandLogo size="md" className="shrink-0" />
             <div className="min-w-0">
-              <PageTitle className="text-center">Nueva contraseña</PageTitle>
+              <PageTitle className="text-center">Restablecer contraseña</PageTitle>
               <p className="text-slate-500 dark:text-slate-400 mt-1.5 text-sm">
-                Elige una contraseña nueva para tu cuenta.
+                {showPasswordForm
+                  ? 'Elige una contraseña nueva para tu cuenta.'
+                  : 'Te enviaremos un enlace para cambiar tu contraseña.'}
               </p>
             </div>
           </div>
 
-          {linkError && <Alert variant="error">{linkError}</Alert>}
-
-          {!linkError && !ready && (
+          {checkingLink && (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center">Validando enlace…</p>
           )}
 
-          {!linkError && ready && (
-            <form onSubmit={handleSubmit} noValidate className="space-y-5">
+          {!checkingLink && showPasswordForm && (
+            <form onSubmit={handleSavePassword} noValidate className="space-y-5">
               <FormField label="Nueva contraseña" required htmlFor="new-password">
                 <Input
                   id="new-password"
@@ -142,7 +164,6 @@ export default function ResetPasswordPage() {
                   required
                 />
               </FormField>
-
               <FormField label="Confirmar contraseña" required htmlFor="confirm-password">
                 <Input
                   id="confirm-password"
@@ -154,15 +175,43 @@ export default function ResetPasswordPage() {
                   required
                 />
               </FormField>
-
               {error && <Alert variant="error">{error}</Alert>}
               {message && <Alert variant="success">{message}</Alert>}
-
               <Button type="submit" loading={loading} size="lg" className="w-full mt-1">
                 Guardar contraseña
               </Button>
             </form>
           )}
+
+          {!checkingLink && !showPasswordForm && (
+            <form onSubmit={handleRequestLink} noValidate className="space-y-5">
+              <FormField label="Correo electrónico" required htmlFor="reset-email">
+                <Input
+                  id="reset-email"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  autoComplete="email"
+                  required
+                />
+              </FormField>
+              {error && <Alert variant="error">{error}</Alert>}
+              {message && <Alert variant="success">{message}</Alert>}
+              <Button type="submit" loading={loading} size="lg" className="w-full mt-1">
+                Enviar enlace
+              </Button>
+            </form>
+          )}
+
+          <p className="text-center mt-5 text-sm text-slate-500 dark:text-slate-400">
+            <Link
+              to="/"
+              className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline underline-offset-2"
+            >
+              Volver al inicio de sesión
+            </Link>
+          </p>
         </div>
 
         <p className="login-page__footer text-center mt-6 text-xs flex flex-col items-center gap-2">
