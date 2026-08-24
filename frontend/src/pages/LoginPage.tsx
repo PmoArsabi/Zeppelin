@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { getAuthEmailOrigin } from '../lib/appUrl'
 import { useTheme } from '../context/ThemeContext'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
@@ -38,7 +39,7 @@ export default function LoginPage() {
         if (error) throw error
       } else {
         const { error } = await supabase.functions.invoke('request-password-reset', {
-          body: { email, origin: window.location.origin },
+          body: { email, origin: getAuthEmailOrigin() },
         })
         if (error) throw error
         setMessage('Enlace enviado. Revisa tu bandeja de entrada.')
