@@ -1,4 +1,4 @@
-const RESET_PATH = '/reset-password'
+export const RESET_PATH = '/reset-password'
 const PRODUCTION_URL = 'https://viajes-zeppelin.vercel.app'
 
 function normalizeOrigin(url: string): string {
@@ -18,13 +18,14 @@ function isLocalHost(hostname: string): boolean {
 
 /**
  * Origin used in auth emails (recovery / invite).
- * Never send localhost: recovery links must open the public site.
+ * Local preview → localhost. Production → public site.
+ * Both URLs must be in Supabase Auth Redirect URLs.
  */
 export function getAuthEmailOrigin(): string {
-  const configured = envAppUrl()
-  if (configured) return configured
-  if (isLocalHost(window.location.hostname)) return PRODUCTION_URL
-  return normalizeOrigin(window.location.origin)
+  if (isLocalHost(window.location.hostname)) {
+    return normalizeOrigin(window.location.origin)
+  }
+  return envAppUrl() ?? PRODUCTION_URL
 }
 
 export function isPasswordRecoveryReturn(): boolean {
