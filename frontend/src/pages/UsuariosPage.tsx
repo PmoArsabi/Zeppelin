@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { getAuthEmailOrigin } from '../lib/appUrl'
 import { useAuth } from '../context/AuthContext'
 import AppShell from '../components/layout/AppShell'
 import Button from '../components/ui/Button'
@@ -156,7 +157,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             display_name: form.display_name.trim(),
             es_admin: form.es_admin,
             roles: form.es_admin ? [] : rolesFormToPayload(form.roles),
-            origin: window.location.origin,
+            origin: getAuthEmailOrigin(),
             ...(form.password.trim() ? { password: form.password.trim() } : {}),
           }),
         }
@@ -527,7 +528,7 @@ export default function UsuariosPage({ onNavigate }: Props) {
             'Authorization': `Bearer ${session!.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ user_id: u.id, action: 'resend_invite', origin: window.location.origin }),
+          body: JSON.stringify({ user_id: u.id, action: 'resend_invite', origin: getAuthEmailOrigin() }),
         }
       )
       const json = await res.json()

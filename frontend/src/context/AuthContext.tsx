@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { isPasswordRecoveryReturn } from '../lib/appUrl'
 
 export type UserRole = 'coordinador' | 'asesor' | 'tiqueteador' | 'financiero' | 'analista_bsp'
 export type UnidadSlug = 'mice' | 'corp' | 'siigo' | 'anticipos'
@@ -36,6 +37,9 @@ interface AuthContextValue {
   displayName: string
   hasPermission: (unidad: UnidadSlug, permiso: string) => boolean
   signOut: () => Promise<void>
+  /** true si el usuario llegó por el correo de recuperación y debe definir una nueva contraseña */
+  passwordRecovery: boolean
+  clearPasswordRecovery: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -51,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [displayName, setDisplayName] = useState('')
   const [permisos, setPermisos] = useState<Set<string>>(new Set())
   const [hasPowerbiInformes, setHasPowerbiInformes] = useState(false)
+  const [passwordRecovery, setPasswordRecovery] = useState(() => isPasswordRecoveryReturn())
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -58,7 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
@@ -155,11 +161,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => { await supabase.auth.signOut() }
+  const clearPasswordRecovery = () => setPasswordRecovery(false)
 
   return (
     <AuthContext.Provider value={{
       user, session, loading, rolesPorUnidad, unidades, permissions,
       isAdmin, hasPowerbiInformes, displayName: user ? displayName : '', hasPermission, signOut,
+      passwordRecovery, clearPasswordRecovery,
     }}>
       {children}
     </AuthContext.Provider>
