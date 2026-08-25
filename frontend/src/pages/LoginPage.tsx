@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getAuthEmailOrigin } from '../lib/appUrl'
 import { useTheme } from '../context/ThemeContext'
@@ -13,6 +14,7 @@ type Mode = 'login' | 'recovery'
 
 export default function LoginPage() {
   const { theme, toggle } = useTheme()
+  const navigate = useNavigate()
   const [mode, setMode]         = useState<Mode>('login')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -149,7 +151,7 @@ export default function LoginPage() {
             <p className="text-center mt-5 text-sm text-slate-500 dark:text-slate-400">
               <button
                 type="button"
-                onClick={() => switchMode('recovery')}
+                onClick={() => navigate('/reset-password')}
                 className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline underline-offset-2"
               >
                 ¿Olvidaste tu contraseña?
